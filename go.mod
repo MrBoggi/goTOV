@@ -1,3 +1,1 @@
-module github.com/mortenbogetvedt/goTOV
-
-go 1.23
+"module github.com/mortenbogetvedt/goTOV" 
