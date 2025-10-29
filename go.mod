@@ -1,1 +1,1 @@
-"module github.com/mortenbogetvedt/goTOV" 
+"module github.com/mrboggi/goTOV" 
