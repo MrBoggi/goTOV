@@ -3,6 +3,13 @@ module github.com/MrBoggi/goTOV
 go 1.25.3
 
 require (
-	github.com/cihub/seelog v0.0.0-20170130134532-f561c5e57575 // indirect
-	github.com/stamp/goADS v0.0.0-20211110084739-f0e7b1091d64 // indirect
+	github.com/gopcua/opcua v0.8.0
+	github.com/rs/zerolog v1.34.0
+	gopkg.in/yaml.v3 v3.0.1
+)
+
+require (
+	github.com/mattn/go-colorable v0.1.13 // indirect
+	github.com/mattn/go-isatty v0.0.19 // indirect
+	golang.org/x/sys v0.28.0 // indirect
 )
