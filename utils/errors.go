@@ -1,0 +1,1 @@
+// evt. hjelpere (retry, osv.)
