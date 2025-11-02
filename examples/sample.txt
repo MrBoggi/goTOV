@@ -1,0 +1,5 @@
+PS C:\Users\ianko\OneDrive\Documents\GitHub\goTOV\examples> go run .\readAnyType.go -node "ns=4;s=MAIN.count" -user "ok" -pass "ok"                    
+-25445
+PS C:\Users\ianko\OneDrive\Documents\GitHub\goTOV\examples> go run .\readAnyType.go -node "i=2258" -user "ok" -pass "ok"                               
+time.Date(2025, time.November, 2, 11, 29, 2, 646832500, time.UTC)
+PS C:\Users\ianko\OneDrive\Documents\GitHub\goTOV\examples> 
