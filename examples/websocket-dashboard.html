@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>goTØV Live Tags</title>
+  <style>
+    body {
+      font-family: "Segoe UI", sans-serif;
+      background: #111;
+      color: #eee;
+      padding: 20px;
+    }
+    h1 {
+      color: #ffa500;
+      margin-bottom: 10px;
+    }
+    table {
+      border-collapse: collapse;
+      width: 100%;
+      max-width: 900px;
+      background: #222;
+      border-radius: 10px;
+      overflow: hidden;
+    }
+    th, td {
+      padding: 8px 10px;
+      border-bottom: 1px solid #333;
+      text-align: left;
+    }
+    th {
+      background: #333;
+      color: #ffa500;
+    }
+    tr:hover {
+      background: #2a2a2a;
+    }
+    .status {
+      margin: 10px 0;
+      font-weight: bold;
+    }
+    .ok { color: #4caf50; }
+    .err { color: #f44336; }
+  </style>
+</head>
+<body>
+  <h1>🍺 goTØV Live Tag Monitor</h1>
+  <div id="status" class="status">Connecting...</div>
+  <table id="tagTable">
+    <thead>
+      <tr>
+        <th>Tag</th>
+        <th>Value</th>
+        <th>Type</th>
+        <th>Timestamp</th>
+      </tr>
+    </thead>
+    <tbody id="tableBody"></tbody>
+  </table>
+
+  <script>
+    const statusEl = document.getElementById("status");
+    const tableBody = document.getElementById("tableBody");
+    const tags = {}; // key=tag, value={value, type, ts}
+
+    function renderTable() {
+      tableBody.innerHTML = Object.entries(tags)
+        .map(([tag, data]) => `
+          <tr>
+            <td>${tag}</td>
+            <td>${data.value}</td>
+            <td>${data.value_type}</td>
+            <td>${new Date(data.ts_ms).toLocaleTimeString()}</td>
+          </tr>
+        `)
+        .join("");
+    }
+
+    function connectWS() {
+      const ws = new WebSocket("ws://localhost:8080/api/stream/tags");
+
+      ws.onopen = () => {
+        statusEl.textContent = "✅ Connected to goTØV backend";
+        statusEl.className = "status ok";
+      };
+
+      ws.onmessage = (event) => {
+        const msg = JSON.parse(event.data);
+        tags[msg.tag] = msg;
+        renderTable();
+      };
+
+      ws.onclose = () => {
+        statusEl.textContent = "❌ Disconnected — retrying in 3s...";
+        statusEl.className = "status err";
+        setTimeout(connectWS, 3000);
+      };
+
+      ws.onerror = (err) => {
+        console.error("WebSocket error:", err);
+        ws.close();
+      };
+    }
+
+    connectWS();
+  </script>
+</body>
+</html>

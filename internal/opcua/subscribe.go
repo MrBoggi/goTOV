@@ -6,10 +6,10 @@ import (
 	"time"
 
 	"github.com/gopcua/opcua"
-	"github.com/gopcua/opcua/ua" // 👈 nødvendig
+	"github.com/gopcua/opcua/ua"
 )
 
-// SubscribeAll subscribes to all provided nodes and logs value changes.
+// SubscribeAll subscribes to all provided nodes and pushes updates to c.Updates.
 func (c *Client) SubscribeAll(ctx context.Context, nodes []*ua.NodeID) error {
 	if len(nodes) == 0 {
 		return fmt.Errorf("no nodes to subscribe")
@@ -17,19 +17,16 @@ func (c *Client) SubscribeAll(ctx context.Context, nodes []*ua.NodeID) error {
 
 	c.log.Info().Msgf("📡 Subscribing to %d nodes...", len(nodes))
 
-	ch := make(chan *opcua.PublishNotificationData, 10)
+	ch := make(chan *opcua.PublishNotificationData, 20)
 	params := &opcua.SubscriptionParameters{Interval: time.Second}
 
 	sub, err := c.conn.Subscribe(ctx, params, ch)
 	if err != nil {
 		return fmt.Errorf("create subscription failed: %w", err)
 	}
-	defer sub.Cancel(ctx)
 
-	// --- Opprett handle→tag-navn map ---
+	// --- Opprett handle → tag-navn map ---
 	handleMap := make(map[uint32]string)
-
-	// --- Opprett Monitored Items ---
 	for i, id := range nodes {
 		handle := uint32(i + 1000)
 		handleMap[handle] = id.String()
@@ -40,13 +37,20 @@ func (c *Client) SubscribeAll(ctx context.Context, nodes []*ua.NodeID) error {
 		}
 	}
 
-	// --- Lytte på meldinger ---
+	// --- Les meldinger kontinuerlig ---
 	go func() {
+		defer func() {
+			// avslutt sub når context stoppes eller loop avsluttes
+			_ = sub.Cancel(context.Background())
+			c.log.Info().Msg("🧭 Subscription stopped gracefully")
+		}()
+
 		for {
 			select {
 			case <-ctx.Done():
 				c.log.Info().Msg("🛑 Subscription context cancelled")
 				return
+
 			case n := <-ch:
 				if n == nil || n.Value == nil {
 					continue
@@ -59,18 +63,22 @@ func (c *Client) SubscribeAll(ctx context.Context, nodes []*ua.NodeID) error {
 							continue
 						}
 						val := item.Value.Value.Value()
-						tagName := handleMap[item.ClientHandle]
+						tag := handleMap[item.ClientHandle]
 
-						// send update to channel
-						c.Updates <- TagUpdate{
-							Name:  tagName,
+						// Logg til konsoll
+						c.log.Info().Msgf("🔄 %s = %v (%T)", tag, val, val)
+
+						// Push til WS via kanal
+						select {
+						case c.Updates <- TagUpdate{
+							Name:  tag,
 							Value: val,
 							Type:  fmt.Sprintf("%T", val),
+						}:
+						default:
+							// unngå blokkering om kanal er full
+							c.log.Warn().Msg("⚠️ Update channel full, skipping")
 						}
-
-						// and log to console
-						c.log.Info().
-							Msgf("🔄 %s = %v (%T)", tagName, val, val)
 					}
 				}
 			}
@@ -78,7 +86,8 @@ func (c *Client) SubscribeAll(ctx context.Context, nodes []*ua.NodeID) error {
 	}()
 
 	c.log.Info().Msg("✅ Subscription started (Ctrl+C to stop)")
+
+	// Blocker til context kanselleres
 	<-ctx.Done()
-	c.log.Info().Msg("🧭 Subscription stopped gracefully")
 	return nil
 }
