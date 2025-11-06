@@ -15,7 +15,7 @@ import (
 
 func main() {
 	var (
-		endpoint = flag.String("endpoint", "opc.tcp://localhost:4840", "OPC UA Endpoint URL")
+		endpoint = flag.String("endpoint", "opc.tcp://192.168.10.150:4840", "OPC UA Endpoint URL")
 		nodeID   = flag.String("node", "", "NodeID to read, such as ns=5;i=123")
 		user     = flag.String("user", "", "username for opcua server")
 		pass     = flag.String("pass", "", "password for opcua server")

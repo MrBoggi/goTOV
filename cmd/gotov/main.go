@@ -10,7 +10,6 @@ import (
 	"github.com/MrBoggi/goTOV/internal/config"
 	"github.com/MrBoggi/goTOV/internal/logger"
 	"github.com/MrBoggi/goTOV/internal/opcua"
-	//"github.com/gopcua/opcua/ua" // 👈 nødvendig for StatusCodeString()
 )
 
 func main() {
@@ -18,8 +17,8 @@ func main() {
 	log := logger.New()
 	log.Info().Msg("🚀 Starting goTØV backend")
 
-	// --- Load config (default: configs/config.yaml) ---
-	cfg, err := config.Load("")
+	// --- Load config ---
+	cfg, err := config.Load("configs/config.yaml")
 	if err != nil {
 		log.Fatal().Err(err).Msg("❌ Failed to load configuration")
 	}
@@ -44,35 +43,37 @@ func main() {
 	}
 	log.Info().Msg("✅ Connected to Beckhoff PLC via OPC UA")
 
-	// --- Test read ---
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	// --- Create cancellable context ---
+	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	nodeID := "ns=4;s=MAIN"
-	log.Info().Str("node", nodeID).Msg("📡 Reading node")
-
-	resp, err := client.ReadRaw(ctx, nodeID)
+	// --- List symbols ---
+	nodes, err := client.ListSymbols(ctx)
 	if err != nil {
-		log.Error().Err(err).Msg("❌ Read failed")
-	} else if len(resp.Results) == 0 || resp.Results[0].Value == nil {
-		log.Warn().
-			Str("status", resp.Results[0].Status.Error()).
-			Msg("⚠️ Empty or nil value")
-	} else {
-		val := resp.Results[0].Value.Value()
-		statusText := resp.Results[0].Status.Error()
+		log.Fatal().Err(err).Msg("❌ Failed to list PLC symbols")
+	}
+	log.Info().Msgf("🧭 Found %d symbols manually", len(nodes))
 
-		log.Info().
-			Str("status", statusText).
-			Interface("value", val).
-			Msgf("✅ Read success: %v (%T)", val, val)
+	// --- Start event listener goroutine ---
+	go func() {
+		for update := range client.Updates {
+			log.Info().
+				Str("tag", update.Name).
+				Interface("value", update.Value).
+				Msgf("📤 Event: %s = %v (%s)", update.Name, update.Value, update.Type)
+		}
+	}()
+
+	// --- Start subscription (blocking) ---
+	if err := client.SubscribeAll(ctx, nodes); err != nil {
+		log.Fatal().Err(err).Msg("❌ Subscription failed")
 	}
 
 	// --- Graceful shutdown ---
 	stop := make(chan os.Signal, 1)
 	signal.Notify(stop, syscall.SIGINT, syscall.SIGTERM)
 	<-stop
-
 	log.Info().Msg("🛑 Shutting down gracefully...")
+	cancel() // Cancel context -> stops subscription + event listener
 	time.Sleep(500 * time.Millisecond)
 }
