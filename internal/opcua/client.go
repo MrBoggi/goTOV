@@ -14,16 +14,19 @@ import (
 
 // Client wraps the underlying gopcua.Client with logging and helper methods.
 type Client struct {
-	conn    *opcua.Client
-	log     zerolog.Logger
-	Updates chan TagUpdate // 👈 internal event channel for tag updates
+	conn          *opcua.Client
+	log           zerolog.Logger
+	Updates       chan TagUpdate    // 👈 internal event channel for tag updates
+	displayNames  map[string]string // 🔧 cache of NodeID → DisplayName
+	displayLoaded bool              // 🔧 to avoid double loading
 }
 
 // TagUpdate represents a single OPC UA value update
 type TagUpdate struct {
-	Name  string
-	Value interface{}
-	Type  string
+	Name        string      `json:"name"`
+	DisplayName string      `json:"display_name"`
+	Value       interface{} `json:"value"`
+	Type        string      `json:"type"`
 }
 
 // NewClient creates an OPC UA client supporting both Anonymous and Username/Password authentication.
@@ -77,9 +80,10 @@ func NewClient(endpoint, username, password string, log zerolog.Logger) (*Client
 	}
 
 	return &Client{
-		conn:    c,
-		log:     log,
-		Updates: make(chan TagUpdate, 100),
+		conn:         c,
+		log:          log,
+		Updates:      make(chan TagUpdate, 100),
+		displayNames: make(map[string]string), // 🔧 initialize here
 	}, nil
 }
 
@@ -148,4 +152,9 @@ func (c *Client) ReadNodeValue(ctx context.Context, nodeID string) (interface{},
 	}
 
 	return val, nil
+}
+
+// 🔧 Utility: store display names for later use
+func (c *Client) SetDisplayName(nodeID, name string) {
+	c.displayNames[nodeID] = name
 }

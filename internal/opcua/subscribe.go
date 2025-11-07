@@ -65,18 +65,23 @@ func (c *Client) SubscribeAll(ctx context.Context, nodes []*ua.NodeID) error {
 						val := item.Value.Value.Value()
 						tag := handleMap[item.ClientHandle]
 
+						display := ""
+						if c.displayNames != nil {
+							display = c.displayNames[tag]
+						}
+
 						// Logg til konsoll
-						c.log.Info().Msgf("🔄 %s = %v (%T)", tag, val, val)
+						c.log.Info().Msgf("🔄 %s = %v (%T)", display, val, val)
 
 						// Push til WS via kanal
 						select {
 						case c.Updates <- TagUpdate{
-							Name:  tag,
-							Value: val,
-							Type:  fmt.Sprintf("%T", val),
+							Name:        tag,
+							DisplayName: display, // 👈 bruker variabelen
+							Value:       val,
+							Type:        fmt.Sprintf("%T", val),
 						}:
 						default:
-							// unngå blokkering om kanal er full
 							c.log.Warn().Msg("⚠️ Update channel full, skipping")
 						}
 					}
