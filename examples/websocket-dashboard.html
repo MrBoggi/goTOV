@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>goTØV Live Tags</title>
+  <title>🍺 goTØV – UA Live Dashboard</title>
   <style>
     body {
       font-family: "Segoe UI", sans-serif;
@@ -15,25 +15,29 @@
       color: #ffa500;
       margin-bottom: 10px;
     }
+    h2 {
+      color: #ffa500;
+      margin-top: 30px;
+      border-bottom: 1px solid #333;
+      padding-bottom: 4px;
+    }
     table {
       border-collapse: collapse;
       width: 100%;
-      max-width: 900px;
+      max-width: 950px;
       background: #222;
       border-radius: 10px;
       overflow: hidden;
+      margin-top: 5px;
     }
     th, td {
-      padding: 8px 10px;
+      padding: 6px 10px;
       border-bottom: 1px solid #333;
       text-align: left;
     }
     th {
       background: #333;
       color: #ffa500;
-    }
-    tr:hover {
-      background: #2a2a2a;
     }
     .status {
       margin: 10px 0;
@@ -42,22 +46,13 @@
     .ok { color: #4caf50; }
     .err { color: #f44336; }
 
-    /* --- Kontrollpanel --- */
-    .controls {
-      margin-top: 30px;
-      max-width: 900px;
-      background: #222;
-      border-radius: 10px;
-      padding: 15px;
-    }
-    .controls h2 {
-      color: #ffa500;
-      margin-bottom: 10px;
-    }
+    /* Kontrollpanel */
     .control-grid {
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
       gap: 10px;
+      margin-top: 10px;
+      max-width: 950px;
     }
     button.toggle {
       background: #333;
@@ -67,153 +62,180 @@
       border-radius: 8px;
       cursor: pointer;
       font-weight: bold;
+      transition: all 0.25s ease;
     }
-    button.toggle.on {
-      background: #4caf50;
-      color: #fff;
-    }
-    button.toggle.off {
-      background: #f44336;
-      color: #fff;
-    }
+    button.toggle.on { background: #4caf50; }
+    button.toggle.off { background: #f44336; }
   </style>
 </head>
 <body>
-  <h1>🍺 goTØV Live Tag Monitor</h1>
+  <h1>🍺 goTØV – Live UA Monitor</h1>
   <div id="status" class="status">Connecting...</div>
 
-  <!-- Live data -->
-  <table id="tagTable">
+  <!-- Temperaturer -->
+  <h2>🌡️ Temperatur- og sensorinnganger</h2>
+  <table id="tempTable">
     <thead>
-      <tr>
-        <th>Display Name</th>
-        <th>Value</th>
-        <th>Type</th>
-        <th>Timestamp</th>
-      </tr>
+      <tr><th>Sensor</th><th>Verdi</th><th>Type</th><th>Tid</th></tr>
     </thead>
-    <tbody id="tableBody"></tbody>
+    <tbody id="tempBody"></tbody>
   </table>
 
-  <!-- Kontrollseksjon -->
-  <div class="controls">
-    <h2>⚙️ Manual Control</h2>
-    <div class="control-grid">
-      <button class="toggle" data-tag="MAIN.fbUA.VannInnVentil">Ventil inn (Åpen/Stengt)</button>
-      <button class="toggle" data-tag="MAIN.fbUA.fermenter1Kjoleventil">Fermenter1 kjøleventil (Åpen/Stengt)</button>
-      <button class="toggle" data-tag="MAIN.fbUA.fermenter2Kjoleventil">Fermenter2 kjøleventil (Åpen/Stengt)</button>
-      <button class="toggle" data-tag="MAIN.fbUA.fermenter1Varmekappe">Fermenter1 varmekappe (Av/På)</button>
-      <button class="toggle" data-tag="MAIN.fbUA.fermenter2Varmekappe">Fermenter2 varmekappe (Av/På)</button>
-      <button class="toggle" data-tag="MAIN.fbUA.glykolkjolerPumpe">Glykolkjølerpumpe (Av/På)</button>
-    </div>
+  <!-- Flow -->
+  <h2>💧 Flowmålere</h2>
+  <table id="flowTable">
+    <thead>
+      <tr><th>Sensor</th><th>Verdi</th><th>Type</th><th>Tid</th></tr>
+    </thead>
+    <tbody id="flowBody"></tbody>
+  </table>
+
+  <!-- Pumper og ventiler -->
+  <h2>⚙️ Manuell kontroll</h2>
+  <div class="control-grid" id="controls">
+    <button class="toggle" data-tag="MAIN.fbUA.pumpeHLT">HLT Pumpe</button>
+    <button class="toggle" data-tag="MAIN.fbUA.pumpeWort">Vørterpumpe</button>
+    <button class="toggle" data-tag="MAIN.fbUA.V1_VannInn">V1 Vann inn</button>
+    <button class="toggle" data-tag="MAIN.fbUA.V2_HLT_TilMLT">V2 HLT → MLT</button>
+    <button class="toggle" data-tag="MAIN.fbUA.V3_MLT_TilBK">V3 MLT → BK</button>
+    <button class="toggle" data-tag="MAIN.fbUA.V4_BK_TilHX">V4 BK → HX</button>
+    <button class="toggle" data-tag="MAIN.fbUA.V5_HX_TilDrain">V5 HX → Avløp</button>
+    <button class="toggle" data-tag="MAIN.fbUA.V6_HX_TilFerment">V6 HX → Ferment</button>
+    <button class="toggle" data-tag="MAIN.fbUA.V7_SpargeWater">V7 Spargevann</button>
+    <button class="toggle" data-tag="MAIN.fbUA.V8_ChillerIn">V8 Chiller In</button>
+    <button class="toggle" data-tag="MAIN.fbUA.V9_ChillerOut">V9 Chiller Out</button>
+  </div>
+
+  <!-- Gjæring -->
+  <h2>🍶 Gjærings- og kjølesystem</h2>
+  <div class="control-grid">
+    <button class="toggle" data-tag="MAIN.fbUA.fermenter1Kjoleventil">Fermenter1 kjøleventil (Åpen/Stengt)</button>
+    <button class="toggle" data-tag="MAIN.fbUA.fermenter2Kjoleventil">Fermenter2 kjøleventil (Åpen/Stengt)</button>
+    <button class="toggle" data-tag="MAIN.fbUA.fermenter1Varmekappe">Fermenter1 varmekappe (Av/På)</button>
+    <button class="toggle" data-tag="MAIN.fbUA.fermenter2Varmekappe">Fermenter2 varmekappe (Av/På)</button>
+    <button class="toggle" data-tag="MAIN.fbUA.glykolkjolerPumpe">Glykolkjølerpumpe (Av/På)</button>
   </div>
 
   <script>
     const statusEl = document.getElementById("status");
-    const tableBody = document.getElementById("tableBody");
-    const tags = {}; // key = tag, value = {display_name, value, value_type, ts_ms}
+    const tags = {};
     const toggleButtons = document.querySelectorAll("button.toggle");
 
-    // 🟢 Oppdater knappestatus (fra både klikk og websocket)
     function setButtonState(tag, value) {
-      // Normaliser namespace slik at ns=4;s=MAIN.fbUA.X matcher knappens data-tag
-      const normalizedTag = tag.replace(/^ns=\d+;s=/, "");
-      const btn = document.querySelector(`button[data-tag="${normalizedTag}"]`);
+      const normalized = tag.replace(/^ns=\\d+;s=/, "");
+      const btn = document.querySelector(`button[data-tag="${normalized}"]`);
       if (!btn) return;
 
       const isOn = value === true || value === 1 || value === "true";
       btn.classList.toggle("on", isOn);
       btn.classList.toggle("off", !isOn);
 
-      // Hent base label
-      const label = btn.dataset.label || btn.textContent.replace(/\(.*\)/, "").trim();
-      btn.dataset.label = label;
+      const base = btn.dataset.label || btn.textContent.replace(/\\(.*\\)/, "").trim();
+      btn.dataset.label = base;
+      if (base.toLowerCase().includes("ventil"))
+        btn.textContent = `${base} (${isOn ? "Åpen" : "Stengt"})`;
+      else
+        btn.textContent = `${base} (${isOn ? "På" : "Av"})`;
+    }
 
-      // Sett riktig tekst basert på type
-      if (label.toLowerCase().includes("ventil")) {
-        btn.textContent = `${label} (${isOn ? "Åpen" : "Stengt"})`;
-      } else if (label.toLowerCase().includes("varmekappe") || label.toLowerCase().includes("pumpe")) {
-        btn.textContent = `${label} (${isOn ? "På" : "Av"})`;
+    // Lagre brukerens valg i minnet (og evt. i localStorage senere)
+    const scalePrefs = {};
+
+    function renderTable() {
+      const tempBody = document.getElementById("tempBody");
+      const flowBody = document.getElementById("flowBody");
+      tempBody.innerHTML = "";
+      flowBody.innerHTML = "";
+
+      // Legg til header med "Skalèr"
+      if (!document.querySelector("#tempTable thead th.scale-header")) {
+        document.querySelector("#tempTable thead tr").insertAdjacentHTML(
+          "beforeend",
+          `<th class="scale-header" style="text-align:center;">Skalèr</th>`
+        );
+      }
+      if (!document.querySelector("#flowTable thead th.scale-header")) {
+        document.querySelector("#flowTable thead tr").insertAdjacentHTML(
+          "beforeend",
+          `<th class="scale-header" style="text-align:center;">Skalèr</th>`
+        );
+      }
+
+      // Sorter etter siste oppdatering
+      const sorted = Object.entries(tags).sort(([, a], [, b]) => b.ts_ms - a.ts_ms);
+
+      for (const [tag, d] of sorted) {
+        const display = d.display_name || tag;
+        const t = new Date(d.ts_ms).toLocaleTimeString();
+        const scaledId = `scale_${tag.replace(/[^\w]/g, "_")}`;
+        const isScaled = scalePrefs[tag] === true;
+        const shownValue = isScaled && !isNaN(d.value)
+          ? (d.value / 10).toFixed(1)
+          : d.value;
+
+        const row = `
+          <tr title="${tag}">
+            <td>${display}</td>
+            <td id="val_${scaledId}">${shownValue}</td>
+            <td>${d.value_type}</td>
+            <td>${t}</td>
+            <td style="text-align:center;">
+              <input type="checkbox" id="${scaledId}" ${
+                isScaled ? "checked" : ""
+              } onchange="toggleScale('${tag}', this.checked)">
+            </td>
+          </tr>`;
+
+        if (tag.toLowerCase().includes("temp") || tag.includes("phValue"))
+          tempBody.insertAdjacentHTML("beforeend", row);
+        else if (tag.toLowerCase().includes("flow"))
+          flowBody.insertAdjacentHTML("beforeend", row);
       }
     }
 
-    // 🟢 Tegn tabell
-    function renderTable() {
-      tableBody.innerHTML = Object.entries(tags)
-        .map(([tag, data]) => {
-          const display = data.display_name || tag;
-          const timeStr = new Date(data.ts_ms).toLocaleTimeString();
-          return `
-            <tr title="${tag}">
-              <td>${display}</td>
-              <td>${data.value}</td>
-              <td>${data.value_type}</td>
-              <td>${timeStr}</td>
-            </tr>
-          `;
-        })
-        .join("");
+    // Toggle skalering og husk valget
+    function toggleScale(tag, enabled) {
+      scalePrefs[tag] = enabled;
+      const scaledId = `scale_${tag.replace(/[^\w]/g, "_")}`;
+      const valEl = document.getElementById(`val_${scaledId}`);
+      const rawValue = tags[tag]?.value;
+      if (valEl && !isNaN(rawValue)) {
+        valEl.textContent = enabled ? (rawValue / 10).toFixed(1) : rawValue;
+      }
     }
 
-    // 🟢 WebSocket-kobling
     function connectWS() {
       const ws = new WebSocket("ws://localhost:8080/api/stream/tags");
-
-      ws.onopen = () => {
-        statusEl.textContent = "✅ Connected to goTØV backend";
-        statusEl.className = "status ok";
-      };
-
-      ws.onmessage = (event) => {
-        const msg = JSON.parse(event.data);
+      ws.onopen = () => { statusEl.textContent = "✅ Connected"; statusEl.className = "status ok"; };
+      ws.onmessage = (e) => {
+        const msg = JSON.parse(e.data);
         tags[msg.tag] = msg;
         renderTable();
         setButtonState(msg.tag, msg.value);
       };
-
       ws.onclose = () => {
-        statusEl.textContent = "❌ Disconnected — retrying in 3s...";
+        statusEl.textContent = "❌ Disconnected, retrying...";
         statusEl.className = "status err";
         setTimeout(connectWS, 3000);
       };
-
-      ws.onerror = (err) => {
-        console.error("WebSocket error:", err);
-        ws.close();
-      };
     }
 
-    // 🟢 Knapp-klikk -> REST write
     toggleButtons.forEach(btn => {
-      // lagre original label
-      btn.dataset.label = btn.textContent.replace(/\(.*\)/, "").trim();
-
+      btn.dataset.label = btn.textContent.replace(/\\(.*\\)/, "").trim();
+      btn.classList.add("off");
       btn.addEventListener("click", async () => {
         const tag = btn.dataset.tag;
         const isOn = btn.classList.contains("on");
         const newValue = !isOn;
-
-        // Lokal visuell oppdatering umiddelbart
         setButtonState(tag, newValue);
-
         try {
-          const res = await fetch("http://localhost:8080/api/write", {
+          await fetch("http://localhost:8080/api/write", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ tag, value: newValue }),
           });
-
-          if (!res.ok) throw new Error(`HTTP ${res.status}`);
-          console.log(`✅ Wrote ${newValue} to ${tag}`);
-        } catch (err) {
-          console.error("Write failed:", err);
-          // fallback til off hvis feilet
-          setButtonState(tag, false);
-        }
+        } catch (e) { console.error("Write failed", e); }
       });
-
-      // init default
-      btn.classList.add("off");
     });
 
     connectWS();
