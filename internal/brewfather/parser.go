@@ -1,0 +1,117 @@
+package brewfather
+
+import (
+	"fmt"
+
+	"github.com/MrBoggi/goTOV/internal/fermentation"
+)
+
+//
+// 1) ENTRYPOINTS
+//
+
+// ExtractFermentationPlan – legacy wrapper
+func ExtractFermentationPlan(recipe *BrewfatherRecipe) (*fermentation.FermentationPlan, error) {
+	return ExtractFermentationPlanFromRecipe(recipe)
+}
+
+//
+// 2) RECIPE → FERMENTATION PLAN
+//
+
+func ExtractFermentationPlanFromRecipe(recipe *BrewfatherRecipe) (*fermentation.FermentationPlan, error) {
+	if recipe == nil {
+		return nil, fmt.Errorf("nil recipe")
+	}
+
+	steps := convertSteps(recipe.Fermentation.Steps)
+
+	plan := &fermentation.FermentationPlan{
+		Name:       recipe.Name,
+		RecipeID:   recipe.ID,
+		TotalSteps: len(steps),
+		Steps:      steps,
+	}
+
+	return plan, nil
+}
+
+//
+// 3) BATCH → FERMENTATION PLAN
+//
+
+func ExtractFermentationPlanFromBatch(batch *BrewfatherBatch) (*fermentation.FermentationPlan, error) {
+	if batch == nil {
+		return nil, fmt.Errorf("nil batch")
+	}
+
+	// 1) Hvis batch har egen gjæringsprofil → bruk den
+	if len(batch.BatchFermentation.Steps) > 0 {
+		tmpRecipe := &BrewfatherRecipe{
+			ID:   batch.ID,
+			Name: batch.Name,
+			Fermentation: BrewfatherFermentation{
+				Steps: convertBatchSteps(batch.BatchFermentation.Steps),
+			},
+		}
+
+		return ExtractFermentationPlanFromRecipe(tmpRecipe)
+	}
+
+	// 2) Fall-back til recipe snapshot
+	return ExtractFermentationPlanFromRecipe(&batch.Recipe)
+}
+
+//
+// 4) STEP CONVERTERS
+//
+
+// Konverter fra batch-step → recipe-step type
+func convertBatchSteps(in []struct {
+	Step        int     `json:"step"`
+	Type        string  `json:"type"`
+	Temperature float64 `json:"temperature"`
+	Time        float64 `json:"time"`
+	TimeUnit    string  `json:"timeUnit"`
+	Description string  `json:"description"`
+}) []FermentationStep {
+	out := make([]FermentationStep, 0, len(in))
+	for _, s := range in {
+		out = append(out, FermentationStep{
+			Step:        s.Step,
+			Type:        s.Type,
+			Temperature: s.Temperature,
+			Time:        s.Time,
+			TimeUnit:    s.TimeUnit,
+			Description: s.Description,
+		})
+	}
+	return out
+}
+
+// Konverter fra BrewfatherRecipe.Fermentation.Steps til backend-format
+func convertSteps(in []FermentationStep) []fermentation.FermentationStep {
+	out := make([]fermentation.FermentationStep, 0, len(in))
+
+	for _, s := range in {
+		var hours float64
+		switch s.TimeUnit {
+		case "day", "days":
+			hours = s.Time * 24
+		case "hour", "hours":
+			hours = s.Time
+		default:
+			hours = s.Time
+		}
+
+		out = append(out, fermentation.FermentationStep{
+			StepNumber:    s.Step,
+			Temperature:   s.Temperature,
+			DurationHours: hours,
+			Description:   s.Description,
+			Type:          s.Type,
+		})
+	}
+
+	return out
+}

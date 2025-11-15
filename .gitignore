@@ -1,6 +1,62 @@
-"bin/" 
-*.pem
-*.der
-# Local runtime config
+#############################
+# Go build artifacts
+#############################
+bin/
+*.exe
+*.dll
+*.so
+*.dylib
+*.test
+
+# Go workspace files
+go.work
+go.work.sum
+
+#############################
+# Logs & temp
+#############################
+*.log
+*.tmp
+*.cache
+*.swp
+*.swo
+
+#############################
+# Operating system files
+#############################
+.DS_Store
+Thumbs.db
+
+#############################
+# Editor folders
+#############################
+.vscode/
+.idea/
+
+#############################
+# Local configuration (never in Git)
+#############################
 config/config.yaml
 config/fermentation.yaml
+
+#############################
+# SQLite databases (local runtime)
+#############################
+*.db
+/data/
+**/data/
+internal/**/data/
+
+#############################
+# Certificates & secrets
+#############################
+*.pem
+*.der
+*.crt
+*.key
+
+#############################
+# Node-related (if UI included)
+#############################
+node_modules/
+dist/

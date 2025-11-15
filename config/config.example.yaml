@@ -1,0 +1,9 @@
+opcua:
+  endpoint: "opc.tcp://<ip>:4840"
+  # username: "opcuauser"
+  # password: "opcuauser"
+  username: ""
+  password: ""
+
+logging:
+  level: "debug"
