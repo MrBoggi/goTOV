@@ -1,13 +1,20 @@
 package brewfather
 
 // FermentationStep is how Brewfather represents a single fermentation step.
+// We support both the "old" style (time/temperature/timeUnit) and the
+// recipe-snapshot style (stepTemp/stepTime).
 type FermentationStep struct {
-	Step        int     `json:"step"`
+	// Generisk form (noen endepunkt bruker dette)
+	Step        int     `json:"step"` // optional
 	Type        string  `json:"type"`
-	Temperature float64 `json:"temperature"`
-	Time        float64 `json:"time"`
-	TimeUnit    string  `json:"timeUnit"`
+	Temperature float64 `json:"temperature"` // optional
+	Time        float64 `json:"time"`        // optional
+	TimeUnit    string  `json:"timeUnit"`    // "day"/"hour", optional
 	Description string  `json:"description"`
+
+	// Recipe/batch snapshot-form (som i Postman-jsonen din)
+	StepTemp float64 `json:"stepTemp"` // °C
+	StepTime float64 `json:"stepTime"` // typisk i dager
 }
 
 // BrewfatherFermentation is the container for all steps.
