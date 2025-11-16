@@ -1,6 +1,8 @@
 package fermentation
 
-// Et enkelt steg i en plan vi LAGRER i SQLite.
+import "time"
+
+// A single step in a fermentation plan stored in SQLite.
 type FermentationStep struct {
 	StepNumber    int     `db:"step_number" json:"step_number"`
 	Temperature   float64 `db:"temperature" json:"temperature"`
@@ -9,22 +11,30 @@ type FermentationStep struct {
 	Type          string  `db:"type" json:"type"`
 }
 
-// Selve planen – én plan per recipe.
+// A complete fermentation plan (one per recipe).
 type FermentationPlan struct {
 	ID         int64              `db:"id"`
 	Name       string             `db:"name"`
 	RecipeID   string             `db:"recipe_id"`
 	TotalSteps int                `db:"total_steps"`
-	Steps      []FermentationStep `db:"-"` // hentes separat
+	Steps      []FermentationStep `db:"-"` // steps loaded separately
 }
 
-// Til bruk av prosessmotoren (kommer senere)
+// Status for a running fermentation.
+type FermentationStatus string
+
+const (
+	StatusRunning FermentationStatus = "running"
+	StatusPaused  FermentationStatus = "paused"
+	StatusDone    FermentationStatus = "done"
+)
+
+// The ACTIVE fermentation batch (runtime state loaded from SQLite).
 type FermentationState struct {
-	BatchID       string  `db:"batch_id"`
-	TankNo        int     `db:"tank_no"`
-	StepIndex     int     `db:"step_index"`
-	StartedAt     string  `db:"started_at"`
-	StepStartedAt string  `db:"step_started_at"`
-	TargetTemp    float64 `db:"target_temp"`
-	Status        string  `db:"status"`
+	BatchID       string             `db:"batch_id"`
+	TankNo        int                `db:"tank_no"`
+	PlanID        int64              `db:"plan_id"`
+	StartedAt     time.Time          `db:"-"`
+	StepStartedAt time.Time          `db:"-"`
+	Status        FermentationStatus `db:"status"`
 }

@@ -18,7 +18,8 @@ func (s *Server) handleWrite(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "invalid JSON", http.StatusBadRequest)
 		return
 	}
-	// ✅ Legg til namespace automatisk om mangler
+
+	// Add namespace automatically if missing
 	if !strings.HasPrefix(req.Tag, "ns=") {
 		req.Tag = fmt.Sprintf("ns=4;s=%s", req.Tag)
 	}
@@ -26,7 +27,7 @@ func (s *Server) handleWrite(w http.ResponseWriter, r *http.Request) {
 	s.log.Info().
 		Str("tag", req.Tag).
 		Interface("value", req.Value).
-		Msg("📝 Write request received")
+		Msg("Write request received")
 
 	if err := s.client.WriteNodeValue(r.Context(), req.Tag, req.Value); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)

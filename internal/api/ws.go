@@ -6,22 +6,27 @@ import (
 	"sync"
 	"time"
 
-	"github.com/MrBoggi/goTOV/internal/opcua"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/cors"
 	"github.com/gorilla/websocket"
 	"github.com/rs/zerolog"
+
+	"github.com/MrBoggi/goTOV/internal/config"
+	"github.com/MrBoggi/goTOV/internal/fermentation"
+	"github.com/MrBoggi/goTOV/internal/opcua"
 )
 
 type Server struct {
 	log    zerolog.Logger
 	client *opcua.Client
+	store  *fermentation.SQLiteStore
+	cfg    *config.Config
 
-	// Connected websocket clients
+	// websocket clients
 	mu          sync.RWMutex
 	subscribers map[*websocket.Conn]bool
 
-	// Latest known values for REST snapshot
+	// REST snapshot cache
 	latestMu sync.RWMutex
 	latest   map[string]WSMessage
 
@@ -36,77 +41,91 @@ type WSMessage struct {
 	Timestamp   int64       `json:"ts_ms"`
 }
 
-// NewServer initializes the WS/HTTP server and listens for OPC UA updates
-func NewServer(log zerolog.Logger, client *opcua.Client) *Server {
+// ------------------------------------------------------
+// NewServer
+// ------------------------------------------------------
+func NewServer(log zerolog.Logger, client *opcua.Client, store *fermentation.SQLiteStore, cfg *config.Config) *Server {
 	s := &Server{
 		log:         log,
 		client:      client,
+		store:       store,
+		cfg:         cfg,
 		subscribers: make(map[*websocket.Conn]bool),
 		latest:      make(map[string]WSMessage),
 		upgrader: websocket.Upgrader{
-			ReadBufferSize:  1024,
-			WriteBufferSize: 1024,
-			CheckOrigin:     func(r *http.Request) bool { return true },
+			CheckOrigin: func(r *http.Request) bool { return true },
 		},
 	}
 
+	// 👇👇👇 CRITICAL – start WS update pump
 	go s.consumeUpdates()
+
 	return s
 }
 
-// Router exposes HTTP endpoints
+// ------------------------------------------------------
+// Router
+// ------------------------------------------------------
 func (s *Server) Router() http.Handler {
 	r := chi.NewRouter()
 
-	// ✅ Tillat CORS fra localhost og filsystem (for testing)
+	// Allow CORS from everywhere (dev mode)
 	r.Use(cors.Handler(cors.Options{
-		AllowedOrigins:   []string{"*"}, // bruk "*" for testing, begrens senere
-		AllowedMethods:   []string{"GET", "POST", "OPTIONS"},
-		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-CSRF-Token"},
-		AllowCredentials: false,
-		MaxAge:           300,
+		AllowedOrigins: []string{"*"},
+		AllowedMethods: []string{"GET", "POST", "OPTIONS"},
+		AllowedHeaders: []string{"Accept", "Authorization", "Content-Type"},
 	}))
 
-	// Endpoints
+	// Health
 	r.Get("/healthz", func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusOK)
 		w.Write([]byte("ok"))
 	})
+
+	// UA / WS / Snapshot / Write
 	r.Get("/api/stream/tags", s.handleWS)
 	r.Get("/api/tags", s.handleSnapshot)
 	r.Post("/api/write", s.handleWrite)
 
+	// Brewfather
+	r.Get("/api/brewfather/batches", s.handleListBatches)
+	r.Get("/api/brewfather/batch/{id}", s.handleGetBatch)
+
+	// Fermentation
+	r.Post("/api/fermentation/start", s.handleStartFermentation)
+	r.Get("/api/fermentation/active", s.handleGetActiveFermentation)
+
 	return r
 }
 
-// Start the HTTP server (blocking)
+// ------------------------------------------------------
+// Start server
+// ------------------------------------------------------
 func (s *Server) Start(addr string) error {
-	s.log.Info().Str("addr", addr).Msg("🌐 HTTP/WS server starting")
+	s.log.Info().Str("addr", addr).Msg("HTTP/WS server starting")
 	return http.ListenAndServe(addr, s.Router())
 }
 
-// --- Internal logic ---
-
+// ------------------------------------------------------
+// Websocket + tag updates
+// ------------------------------------------------------
 func (s *Server) handleWS(w http.ResponseWriter, r *http.Request) {
 	conn, err := s.upgrader.Upgrade(w, r, nil)
 	if err != nil {
-		s.log.Error().Err(err).Msg("❌ WS upgrade failed")
+		s.log.Error().Err(err).Msg("WS upgrade failed")
 		return
 	}
 
 	s.mu.Lock()
 	s.subscribers[conn] = true
 	s.mu.Unlock()
-	s.log.Info().Msg("💬 WS client connected")
 
-	// Send initial snapshot
+	// Send snapshot on connect
 	s.latestMu.RLock()
 	for _, msg := range s.latest {
 		_ = conn.WriteJSON(msg)
 	}
 	s.latestMu.RUnlock()
 
-	// Setup ping handler
 	conn.SetReadLimit(1024)
 	_ = conn.SetReadDeadline(time.Now().Add(60 * time.Second))
 	conn.SetPongHandler(func(string) error {
@@ -116,19 +135,17 @@ func (s *Server) handleWS(w http.ResponseWriter, r *http.Request) {
 
 	go s.keepAlive(conn)
 
-	// Block until client closes
+	// Listen for disconnect
 	for {
 		if _, _, err := conn.ReadMessage(); err != nil {
 			break
 		}
 	}
 
-	// Remove client
 	s.mu.Lock()
 	delete(s.subscribers, conn)
 	s.mu.Unlock()
 	_ = conn.Close()
-	s.log.Info().Msg("🧹 WS client disconnected")
 }
 
 func (s *Server) keepAlive(conn *websocket.Conn) {
@@ -141,26 +158,24 @@ func (s *Server) keepAlive(conn *websocket.Conn) {
 	}
 }
 
+// Snapshot
 func (s *Server) handleSnapshot(w http.ResponseWriter, _ *http.Request) {
 	s.latestMu.RLock()
 	defer s.latestMu.RUnlock()
-	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(s.latest); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-	}
+	_ = json.NewEncoder(w).Encode(s.latest)
 }
 
+// Consume OPC UA update events
 func (s *Server) consumeUpdates() {
 	for ev := range s.client.Updates {
 		msg := WSMessage{
 			Tag:         ev.Name,
 			Value:       ev.Value,
 			ValueType:   ev.Type,
-			DisplayName: ev.DisplayName, // 👈 legg til dette
+			DisplayName: ev.DisplayName,
 			Timestamp:   time.Now().UnixMilli(),
 		}
 
-		// oppdater cache
 		s.latestMu.Lock()
 		s.latest[ev.Name] = msg
 		s.latestMu.Unlock()
@@ -176,13 +191,13 @@ func (s *Server) broadcast(msg WSMessage) {
 	for conn := range s.subscribers {
 		_ = conn.SetWriteDeadline(time.Now().Add(2 * time.Second))
 		if err := conn.WriteJSON(msg); err != nil {
+			// Remove on failed write
 			s.mu.RUnlock()
 			s.mu.Lock()
 			delete(s.subscribers, conn)
 			s.mu.Unlock()
 			s.mu.RLock()
 			_ = conn.Close()
-			s.log.Warn().Err(err).Msg("❌ WS write failed — client removed")
 		}
 	}
 }

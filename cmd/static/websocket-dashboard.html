@@ -116,6 +116,63 @@
     <button class="toggle" data-tag="MAIN.fbUA.glykolkjolerPumpe">Glykolkjølerpumpe (Av/På)</button>
   </div>
 
+  <!-- ============================== -->
+  <!-- 🍺 BREWFATHER IMPORT SECTION -->
+  <!-- ============================== -->
+  <h2>📦 Brewfather – Importér Batch</h2>
+
+  <div style="margin-top:10px; max-width:800px; background:#1b1b1b; padding:15px; border-radius:10px;">
+    
+    <!-- Fetch batches -->
+    <button id="btnFetchBatches" style="padding:8px 15px; margin-bottom:10px;">
+      🔄 Hent batcher fra Brewfather
+    </button>
+
+    <div id="batchListContainer" style="display:none; margin-top:10px;">
+      <label for="batchSelect">Velg batch:</label><br />
+      <select id="batchSelect" style="width:100%; padding:6px; margin-top:5px;"></select>
+    </div>
+
+    <!-- Batch details -->
+    <div id="batchDetails" style="display:none; margin-top:20px;">
+      <h3 style="color:#ffa500;">🛠 Rediger fermenteringsplan</h3>
+      <table id="stepsTable" style="margin-top:10px;">
+        <thead>
+          <tr>
+            <th>Steg</th>
+            <th>Temp (°C)</th>
+            <th>Timer</th>
+            <th>Type</th>
+            <th>Beskrivelse</th>
+          </tr>
+        </thead>
+        <tbody id="stepsBody"></tbody>
+      </table>
+    </div>
+
+    <!-- Start fermentation -->
+    <div id="startFermentation" style="display:none; margin-top:20px;">
+      <h3 style="color:#ffa500;">🚀 Start gjæring</h3>
+
+      <label>Tank:</label><br />
+      <select id="tankSelect" style="width:200px; padding:6px; margin-bottom:10px;">
+        <option value="1">Fermenter 1</option>
+        <option value="2">Fermenter 2</option>
+      </select><br /><br />
+
+      <label>Start fra steg:</label><br />
+      <select id="stepSelect" style="width:200px; padding:6px;"></select>
+
+      <br /><br />
+      <button id="btnStartFermentation" style="padding:10px 20px; font-weight:bold;">
+        🍺 Start fermentering
+      </button>
+    </div>
+  </div>
+
+
+
+
   <script>
     const statusEl = document.getElementById("status");
     const tags = {};
@@ -239,6 +296,121 @@
     });
 
     connectWS();
+    // … resten av WS-koden over er uendret …
+
+    // ---------------------------
+    // BREWFATHER IMPORT LOGIC (FIXED)
+    // ---------------------------
+
+    const btnFetchBatches = document.getElementById("btnFetchBatches");
+    const batchListContainer = document.getElementById("batchListContainer");
+    const batchSelect = document.getElementById("batchSelect");
+    const batchDetails = document.getElementById("batchDetails");
+    const stepsBody = document.getElementById("stepsBody");
+    const startSection = document.getElementById("startFermentation");
+    const tankSelect = document.getElementById("tankSelect");
+    const stepSelect = document.getElementById("stepSelect");
+
+    let currentSteps = [];
+    let selectedBatch = null;
+
+    // -------- 1) Fetch Brewfather Batches ----------
+    btnFetchBatches.onclick = async () => {
+      const res = await fetch("http://localhost:8080/api/brewfather/batches");
+      const batches = await res.json();
+
+      batchSelect.innerHTML = batches
+        .map(b => `<option value="${b._id}">${b.name}</option>`)
+        .join("");
+
+      batchListContainer.style.display = "block";
+    };
+
+    // -------- 2) Select batch and fetch full details --------
+    batchSelect.onchange = async () => {
+      const id = batchSelect.value;
+      const res = await fetch(`http://localhost:8080/api/brewfather/batch/${id}`);
+      const data = await res.json();
+
+      selectedBatch = data;
+
+      // -------- Convert Brewfather data to our step format --------
+      currentSteps = convertBrewfatherToSteps(data);
+
+      renderStepsTable();
+      batchDetails.style.display = "block";
+
+      // Populate "start from step"
+      stepSelect.innerHTML = currentSteps
+        .map((s, i) => `<option value="${i}">Steg ${s.step_number}</option>`)
+        .join("");
+
+      startSection.style.display = "block";
+    };
+
+    // -------- Conversion function --------
+    function convertBrewfatherToSteps(data) {
+      const steps = [];
+
+      if (!data.fermentation || !data.fermentation.tempProfile) {
+        alert("Batch mangler tempProfile – ikke støttet.");
+        return [];
+      }
+
+      data.fermentation.tempProfile.forEach((p, i) => {
+        steps.push({
+          step_number: i + 1,
+          temperature: Number(p.temp) || 20,
+          duration_hours: Number(p.time || p.duration) || 24,
+          type: "fermentation",
+          description: p.description || `Steg ${i + 1}`
+        });
+      });
+
+      return steps;
+    }
+
+    // -------- Render editable step table --------
+    function renderStepsTable() {
+      stepsBody.innerHTML = currentSteps
+        .map((s, i) => `
+          <tr>
+            <td>${s.step_number}</td>
+            <td><input type="number" value="${s.temperature}"
+                onchange="updateStep(${i}, 'temperature', this.value)"></td>
+            <td><input type="number" value="${s.duration_hours}"
+                onchange="updateStep(${i}, 'duration_hours', this.value)"></td>
+            <td><input type="text" value="${s.type}"
+                onchange="updateStep(${i}, 'type', this.value)"></td>
+            <td><input type="text" value="${s.description}"
+                onchange="updateStep(${i}, 'description', this.value)"></td>
+          </tr>
+        `)
+        .join("");
+    }
+
+    window.updateStep = (i, field, value) => {
+      currentSteps[i][field] = value;
+    };
+
+    // -------- 4) Start fermentation --------
+    document.getElementById("btnStartFermentation").onclick = async () => {
+      const payload = {
+        batch_id: selectedBatch._id,
+        tank_no: Number(tankSelect.value),
+        start_step: Number(stepSelect.value),
+        steps: currentSteps
+      };
+
+      const res = await fetch("http://localhost:8080/api/fermentation/start", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+
+      const msg = await res.text();
+      alert("Fermentering startet: " + msg);
+    };
   </script>
 </body>
 </html>
