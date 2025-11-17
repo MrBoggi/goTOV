@@ -25,6 +25,7 @@ func NewSQLiteStore(path string) (*SQLiteStore, error) {
 	return s, nil
 }
 
+// Close releases the database connection and should be called when the store is no longer needed.
 func (s *SQLiteStore) Close() error {
 	return s.DB.Close()
 }
