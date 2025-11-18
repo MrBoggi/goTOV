@@ -243,10 +243,15 @@
             </td>
           </tr>`;
 
-        if (tag.toLowerCase().includes("temp") || tag.includes("phValue"))
-          tempBody.insertAdjacentHTML("beforeend", row);
-        else if (tag.toLowerCase().includes("flow"))
-          flowBody.insertAdjacentHTML("beforeend", row);
+        if (
+            d.value_type.toLowerCase().includes("float") &&
+            !tag.toLowerCase().includes("flow")
+        ) {
+            tempBody.insertAdjacentHTML("beforeend", row);
+        }
+        else if (tag.toLowerCase().includes("flow")) {
+            flowBody.insertAdjacentHTML("beforeend", row);
+        }    
       }
     }
 
@@ -270,6 +275,7 @@
         renderTable();
         setButtonState(msg.tag, msg.value);
       };
+      console.log("WS:", msg.tag, msg.value);
       ws.onclose = () => {
         statusEl.textContent = "❌ Disconnected, retrying...";
         statusEl.className = "status err";

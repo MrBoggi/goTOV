@@ -11,7 +11,7 @@ import (
 // Beckhoff CX OPC UA servers do not expose these via browse, so we define them manually.
 func (c *Client) ListSymbols(ctx context.Context) ([]*ua.NodeID, error) {
 	symbols := []string{
-		"MAIN.fbUA.hltTemp",
+		"MAIN.fbUA.bkTemp",
 		"MAIN.fbUA.mltTemp",
 		"MAIN.fbUA.fermenter1Temp",
 		"MAIN.fbUA.fermenter2Temp",
