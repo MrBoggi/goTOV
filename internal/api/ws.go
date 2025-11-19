@@ -70,7 +70,9 @@ func (s *Server) Router() http.Handler {
 	// Endpoints
 	r.Get("/healthz", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("ok"))
+		if _, err := w.Write([]byte("ok")); err != nil {
+			s.log.Error().Err(err).Msg("failed to write healthz response")
+		}
 	})
 	r.Get("/api/stream/tags", s.handleWS)
 	r.Get("/api/tags", s.handleSnapshot)

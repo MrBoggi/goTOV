@@ -15,10 +15,9 @@ import (
 // Client wraps the underlying gopcua.Client with logging and helper methods.
 type Client struct {
 	conn          *opcua.Client
-	log           zerolog.Logger
-	Updates       chan TagUpdate    // 👈 internal event channel for tag updates
-	displayNames  map[string]string // 🔧 cache of NodeID → DisplayName
-	displayLoaded bool              // 🔧 to avoid double loading
+	log          zerolog.Logger
+	Updates      chan TagUpdate    // 👈 internal event channel for tag updates
+	displayNames map[string]string // 🔧 cache of NodeID → DisplayName
 }
 
 // TagUpdate represents a single OPC UA value update

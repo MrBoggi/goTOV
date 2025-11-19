@@ -99,29 +99,6 @@ func ExtractFermentationPlanFromBatch(batch *BrewfatherBatch) (*fermentation.Fer
 // 4) STEP CONVERTERS
 //
 
-// Konverter fra batch-step → recipe-step type
-func convertBatchSteps(in []struct {
-	Step        int     `json:"step"`
-	Type        string  `json:"type"`
-	Temperature float64 `json:"temperature"`
-	Time        float64 `json:"time"`
-	TimeUnit    string  `json:"timeUnit"`
-	Description string  `json:"description"`
-}) []FermentationStep {
-	out := make([]FermentationStep, 0, len(in))
-	for _, s := range in {
-		out = append(out, FermentationStep{
-			Step:        s.Step,
-			Type:        s.Type,
-			Temperature: s.Temperature,
-			Time:        s.Time,
-			TimeUnit:    s.TimeUnit,
-			Description: s.Description,
-		})
-	}
-	return out
-}
-
 // Konverter fra BrewfatherRecipe.Fermentation.Steps til backend-format
 func convertSteps(in []FermentationStep) []fermentation.FermentationStep {
 	out := make([]fermentation.FermentationStep, 0, len(in))
