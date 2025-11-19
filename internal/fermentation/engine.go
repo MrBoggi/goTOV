@@ -1,3 +1,3 @@
 package fermentation
 
-type Engine struct {}
+type Engine struct{}
