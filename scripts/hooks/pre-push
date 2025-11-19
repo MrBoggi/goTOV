@@ -1,0 +1,24 @@
+#!/bin/sh
+
+echo "🚀 Running pre-push checks..."
+
+echo "▶ Running tests..."
+if ! go test ./...; then
+    echo "❌ Tests failed"
+    exit 1
+fi
+
+echo "▶ Running go vet..."
+if ! go vet ./...; then
+    echo "❌ go vet failed"
+    exit 1
+fi
+
+echo "▶ Running golangci-lint..."
+if ! golangci-lint run; then
+    echo "❌ Linter issues"
+    exit 1
+fi
+
+echo "✅ All checks passed — push allowed."
+exit 0

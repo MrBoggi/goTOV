@@ -1,0 +1,29 @@
+#!/bin/sh
+
+echo "🔍 Running pre-commit checks..."
+
+# 1. gofmt
+echo "▶ Checking gofmt..."
+unformatted=$(gofmt -l .)
+if [ -n "$unformatted" ]; then
+    echo "❌ Unformatted files:"
+    echo "$unformatted"
+    exit 1
+fi
+
+# 2. golangci-lint
+echo "▶ Running golangci-lint..."
+if ! golangci-lint run; then
+    echo "❌ golangci-lint reported issues"
+    exit 1
+fi
+
+# 3. go vet
+echo "▶ Running go vet..."
+if ! go vet ./...; then
+    echo "❌ go vet failed"
+    exit 1
+fi
+
+echo "✅ Pre-commit checks passed."
+exit 0
