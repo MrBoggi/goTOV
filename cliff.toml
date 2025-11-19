@@ -1,0 +1,30 @@
+# git-cliff configuration file
+# Documentation: https://github.com/orhun/git-cliff
+
+[changelog]
+header = """
+# Changelog
+All notable changes to this project will be documented in this file.
+"""
+
+body = """
+## 🚀 Version {{ version }}
+Released: {{ now("%Y-%m-%d") }}
+
+{% for group, commits in commits | group_by(attribute="group") %}
+### {{ group | upper }}
+{% for commit in commits %}
+- {{ commit.message | trim }} (`{{ commit.id | truncate(length=7) }}`)
+{% endfor %}
+{% endfor %}
+"""
+
+# Group commits based on prefixes
+[grouping]
+# Conventional-style grouping
+pattern = "^(feat|fix|docs|refactor|perf|test|ci|chore)(\\(.+\\))?:"
+mapping = { feat = "Features", fix = "Bug Fixes", docs = "Documentation", refactor = "Refactoring", perf = "Performance", test = "Tests", ci = "CI/CD", chore = "Maintenance" }
+
+[git]
+# Ignore merge commits
+filter_commits = true

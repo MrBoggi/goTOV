@@ -1,0 +1,78 @@
+name: Release
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # IMPORTANT for git-cliff
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+
+      # --------------------------------------------------
+      # VERSIONING
+      # --------------------------------------------------
+      - name: Generate version
+        id: version
+        run: |
+          YEAR=$(date +'%Y')
+          MONTH=$(date +'%m')
+          COUNT=$(git rev-list --count HEAD --since="$(date +%Y-%m-01)")
+          VERSION="$YEAR.$MONTH.$COUNT"
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "$VERSION" > version.txt
+
+      # --------------------------------------------------
+      # CHANGELOG
+      # --------------------------------------------------
+      - name: Generate changelog
+        id: changelog
+        uses: orhun/git-cliff-action@v3
+        with:
+          config: cliff.toml
+          args: --latest --tag "v${{ steps.version.outputs.version }}"
+
+      - name: Write changelog to file
+        run: echo "${{ steps.changelog.outputs.changelog }}" > CHANGELOG.md
+
+      - name: Commit updated CHANGELOG.md
+        run: |
+          git config user.name "github-actions"
+          git config user.email "github-actions@github.com"
+          git add CHANGELOG.md
+          git commit -m "docs: update changelog for v${{ steps.version.outputs.version }}" || echo "No changes"
+          git push || true
+
+      # --------------------------------------------------
+      # BUILD BINARY
+      # --------------------------------------------------
+      - name: Build binary
+        run: |
+          go build -ldflags "-X github.com/MrBoggi/goTOV/internal/version.Version=${{ steps.version.outputs.version }}" \
+            -o gotov ./cmd/gotov/
+
+      # --------------------------------------------------
+      # CREATE RELEASE AND UPLOAD FILES
+      # --------------------------------------------------
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: "v${{ steps.version.outputs.version }}"
+          name: "Release ${{ steps.version.outputs.version }}"
+          body: ${{ steps.changelog.outputs.changelog }}
+          files: |
+            gotov
+            version.txt
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
