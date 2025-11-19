@@ -45,6 +45,7 @@ jobs:
         with:
           args: --timeout=5m
           skip-cache: true
+          install-mode: go
 
       - name: Check code formatting
         run: |
