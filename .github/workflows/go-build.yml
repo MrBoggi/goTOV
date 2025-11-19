@@ -40,12 +40,16 @@ jobs:
       - name: Build
         run: go build -o bin/gotov ./cmd/gotov/main.go
 
-      - name: Run linter
-        uses: golangci/golangci-lint-action@v4
-        with:
-          args: --timeout=5m
-          skip-cache: true
-          install-mode: go
+      - name: Install golangci-lint from source
+        run: |
+          echo "Installing golangci-lint via 'go install' to build with runner Go"
+          go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
+          echo "$(go env GOPATH)/bin" >> $GITHUB_PATH
+
+      - name: Run golangci-lint
+        run: |
+          echo "Running golangci-lint"
+          golangci-lint run --out-format=colored-line-number --timeout=5m
 
       - name: Check code formatting
         run: |
