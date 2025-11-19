@@ -54,8 +54,11 @@ jobs:
             exit 1
           fi
 
+      - name: Install gosec
+        run: go install github.com/securego/gosec/v2/cmd/gosec@latest
+
       - name: Run gosec (no sarif)
-        run: gosec -no-fail ./...
+        run: ~/go/bin/gosec -no-fail ./...
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
