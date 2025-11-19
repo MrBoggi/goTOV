@@ -54,18 +54,8 @@ jobs:
             exit 1
           fi
 
-      - name: Check for security issues
-        uses: securego/gosec@master
-        with:
-          args: '-no-fail -fmt sarif -out gosec.sarif ./...'
-        continue-on-error: true
-
-      - name: Upload gosec results
-        uses: github/codeql-action/upload-sarif@v4
-        if: always() && hashFiles('gosec.sarif') != ''
-        with:
-          sarif_file: gosec.sarif
-          category: gosec
+      - name: Run gosec (no sarif)
+        run: gosec -no-fail ./...
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
