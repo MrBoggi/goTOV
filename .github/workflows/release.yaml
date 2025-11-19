@@ -2,8 +2,8 @@ name: Release
 
 on:
   push:
-    branches:
-      - main
+    tags:
+      - "v*"
 
 jobs:
   release:
@@ -13,66 +13,59 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0   # IMPORTANT for git-cliff
+          fetch-depth: 0
+
+      - name: Extract version from tag
+        id: version
+        run: |
+          TAG=${GITHUB_REF#refs/tags/}
+          echo "version=${TAG#v}" >> $GITHUB_OUTPUT
+          echo "${TAG#v}" > version.txt
 
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
           go-version: '1.25'
+          cache: true
 
-      # --------------------------------------------------
-      # VERSIONING
-      # --------------------------------------------------
-      - name: Generate version
-        id: version
-        run: |
-          YEAR=$(date +'%Y')
-          MONTH=$(date +'%m')
-          COUNT=$(git rev-list --count HEAD --since="$(date +%Y-%m-01)")
-          VERSION="$YEAR.$MONTH.$COUNT"
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
-          echo "$VERSION" > version.txt
-
-      # --------------------------------------------------
-      # CHANGELOG
-      # --------------------------------------------------
-      - name: Generate changelog
-        id: changelog
-        uses: orhun/git-cliff-action@v3
-        with:
-          config: cliff.toml
-          args: --latest --tag "v${{ steps.version.outputs.version }}"
-
-      - name: Write changelog to file
-        run: echo "${{ steps.changelog.outputs.changelog }}" > CHANGELOG.md
-
-      - name: Commit updated CHANGELOG.md
-        run: |
-          git config user.name "github-actions"
-          git config user.email "github-actions@github.com"
-          git add CHANGELOG.md
-          git commit -m "docs: update changelog for v${{ steps.version.outputs.version }}" || echo "No changes"
-          git push || true
-
-      # --------------------------------------------------
-      # BUILD BINARY
-      # --------------------------------------------------
       - name: Build binary
         run: |
           go build -ldflags "-X github.com/MrBoggi/goTOV/internal/version.Version=${{ steps.version.outputs.version }}" \
             -o gotov ./cmd/gotov/
 
-      # --------------------------------------------------
-      # CREATE RELEASE AND UPLOAD FILES
-      # --------------------------------------------------
+      - name: Generate changelog
+        id: changelog
+        uses: orhun/git-cliff-action@v3
+        with:
+          config: cliff.toml
+          args: --latest
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: "v${{ steps.version.outputs.version }}"
+          tag_name: ${{ github.ref_name }}
           name: "Release ${{ steps.version.outputs.version }}"
           body: ${{ steps.changelog.outputs.changelog }}
-          files: |
-            gotov
-            version.txt
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build Docker image
+        run: |
+          OWNER_LC="${GITHUB_REPOSITORY_OWNER,,}"
+          VERSION="${{ steps.version.outputs.version }}"
+          docker build -t ghcr.io/$OWNER_LC/gotov:latest \
+                       -t ghcr.io/$OWNER_LC/gotov:$VERSION .
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Push Docker image
+        run: |
+          OWNER_LC="${GITHUB_REPOSITORY_OWNER,,}"
+          VERSION="${{ steps.version.outputs.version }}"
+          docker push ghcr.io/$OWNER_LC/gotov:latest
+          docker push ghcr.io/$OWNER_LC/gotov:$VERSION
