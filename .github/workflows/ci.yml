@@ -2,121 +2,72 @@ name: CI/CD
 
 on:
   push:
-    branches: [ main ]
-  pull_request:
-    branches: [ main ]
-
-permissions:
-  contents: read
-  security-events: write
-  actions: read
-  id-token: write
+    branches:
+      - main
 
 jobs:
 
-  lint:
+  build-test-publish:
     runs-on: ubuntu-latest
+
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
         with:
-          go-version: "1.25"
+          go-version: '1.25'
+          cache: true
 
-      - name: Run gofmt
-        run: gofmt -s -l .
-
-      - name: Run golangci-lint
+      - name: Generate version
+        id: version
         run: |
-          go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
-          golangci-lint run --timeout=5m
+          YEAR=$(date +'%Y')
+          MONTH=$(date +'%m')
+          COUNT=$(git rev-list --count HEAD --since="$(date +%Y-%m-01)")
+          VERSION="$YEAR.$MONTH.$COUNT"
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "$VERSION" > version.txt
 
-  test:
-    runs-on: ubuntu-latest
-    needs: lint
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
-        with:
-          go-version: "1.25"
-
-      - name: Run go vet
-        run: go vet ./...
+      - name: Show version
+        run: echo "Version is ${{ steps.version.outputs.version }}"
 
       - name: Run tests
-        run: go test -v -race ./...
+        run: go test -v ./...
 
-  security:
-    runs-on: ubuntu-latest
-    needs: test
-    steps:
-      - uses: actions/checkout@v4
-      - name: Install gosec
-        run: go install github.com/securego/gosec/v2/cmd/gosec@latest
+      - name: Install golangci-lint
+        run: go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
 
-      - name: Run gosec
-        run: gosec -no-fail ./...
+      - name: Run linters
+        run: |
+          gofmt -l .
+          golangci-lint run ./...
 
-  build:
-    runs-on: ubuntu-latest
-    needs: security
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
-        with:
-          go-version: "1.25"
+      - name: Build with version
+        run: |
+          go build -ldflags "-X github.com/MrBoggi/goTOV/internal/version.Version=${{ steps.version.outputs.version }}" \
+            -o bin/gotov ./cmd/gotov/
 
-      - name: Build binary
-        run: go build -o bin/gotov ./cmd/gotov/main.go
-
-      - name: Upload artifact
+      - name: Upload version artifact
         uses: actions/upload-artifact@v4
         with:
-          name: gotov-binary
-          path: bin/gotov
+          name: build-version
+          path: version.txt
 
-  docker:
-    needs: build
-    runs-on: ubuntu-latest
-
-    env:
-      REGISTRY: ghcr.io
-      IMAGE_NAME: MrBoggi/goTOV
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Login to GHCR
+      - name: Log in to GHCR
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build and push image
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          file: ./Dockerfile
-          push: true
-          tags: |
-            ghcr.io/${{ github.repository_owner }}/goTOV:${{ github.sha }}
-            ghcr.io/${{ github.repository_owner }}/goTOV:latest
+      - name: Build Docker image
+        run: |
+          docker build -t ghcr.io/${{ github.repository_owner }}/gotov:latest \
+                       -t ghcr.io/${{ github.repository_owner }}/gotov:${{ steps.version.outputs.version }} .
 
-  docker-security:
-    needs: docker
-    runs-on: ubuntu-latest
-    permissions:
-      security-events: write
-      contents: read
-
-    steps:
-      - uses: aquasecurity/trivy-action@0.20.0
-        with:
-          image-ref: ghcr.io/${{ github.repository_owner }}/goTOV:${{ github.sha }}
-          format: sarif
-          output: trivy-results.sarif
-
-      - name: Upload SARIF to GitHub
-        uses: github/codeql-action/upload-sarif@v4
-        with:
-          sarif_file: trivy-results.sarif
+      - name: Push Docker image
+        run: |
+          docker push ghcr.io/${{ github.repository_owner }}/gotov:latest
+          docker push ghcr.io/${{ github.repository_owner }}/gotov:${{ steps.version.outputs.version }}

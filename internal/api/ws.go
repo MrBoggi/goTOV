@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/MrBoggi/goTOV/internal/opcua"
+	"github.com/MrBoggi/goTOV/internal/version"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/cors"
 	"github.com/gorilla/websocket"
@@ -58,22 +59,27 @@ func NewServer(log zerolog.Logger, client *opcua.Client) *Server {
 func (s *Server) Router() http.Handler {
 	r := chi.NewRouter()
 
-	// ✅ Tillat CORS fra localhost og filsystem (for testing)
 	r.Use(cors.Handler(cors.Options{
-		AllowedOrigins:   []string{"*"}, // bruk "*" for testing, begrens senere
+		AllowedOrigins:   []string{"*"},
 		AllowedMethods:   []string{"GET", "POST", "OPTIONS"},
 		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-CSRF-Token"},
 		AllowCredentials: false,
 		MaxAge:           300,
 	}))
 
-	// Endpoints
 	r.Get("/healthz", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		if _, err := w.Write([]byte("ok")); err != nil {
-			s.log.Error().Err(err).Msg("failed to write healthz response")
-		}
+		_, _ = w.Write([]byte("ok"))
 	})
+
+	// NEW: Version endpoint ✨
+	r.Get("/api/version", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]string{
+			"version": version.Get(),
+		})
+	})
+
 	r.Get("/api/stream/tags", s.handleWS)
 	r.Get("/api/tags", s.handleSnapshot)
 	r.Post("/api/write", s.handleWrite)
