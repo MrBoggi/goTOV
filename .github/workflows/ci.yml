@@ -64,10 +64,13 @@ jobs:
 
       - name: Build Docker image
         run: |
-          docker build -t ghcr.io/${{ github.repository_owner }}/gotov:latest \
-                       -t ghcr.io/${{ github.repository_owner }}/gotov:${{ steps.version.outputs.version }} .
+          OWNER_LC="${GITHUB_REPOSITORY_OWNER,,}"
+          docker build \
+            -t ghcr.io/$OWNER_LC/gotov:latest \
+            -t ghcr.io/$OWNER_LC/gotov:${{ steps.version.outputs.version }} .
 
       - name: Push Docker image
         run: |
-          docker push ghcr.io/${{ github.repository_owner }}/gotov:latest
-          docker push ghcr.io/${{ github.repository_owner }}/gotov:${{ steps.version.outputs.version }}
+          OWNER_LC="${GITHUB_REPOSITORY_OWNER,,}"
+          docker push ghcr.io/$OWNER_LC/gotov:latest
+          docker push ghcr.io/$OWNER_LC/gotov:${{ steps.version.outputs.version }}
