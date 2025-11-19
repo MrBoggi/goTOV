@@ -43,7 +43,7 @@ jobs:
       - name: Run linter
         uses: golangci/golangci-lint-action@v4
         with:
-          version: v1.63.13
+          version: v1.60.3
           args: --timeout=5m
 
       - name: Check code formatting
