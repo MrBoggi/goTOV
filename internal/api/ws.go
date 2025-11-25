@@ -55,7 +55,6 @@ func NewServer(log zerolog.Logger, client *opcua.Client) *Server {
 	return s
 }
 
-// Router exposes HTTP endpoints
 func (s *Server) Router() http.Handler {
 	r := chi.NewRouter()
 
@@ -72,7 +71,7 @@ func (s *Server) Router() http.Handler {
 		_, _ = w.Write([]byte("ok"))
 	})
 
-	// NEW: Version endpoint ✨
+	// Version endpoint
 	r.Get("/api/version", func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(map[string]string{
@@ -80,9 +79,16 @@ func (s *Server) Router() http.Handler {
 		})
 	})
 
+	// API endpoints
 	r.Get("/api/stream/tags", s.handleWS)
 	r.Get("/api/tags", s.handleSnapshot)
 	r.Post("/api/write", s.handleWrite)
+
+	// ----------------------------------------------------
+	// STATIC FILES (INGENTING annet fjernes eller endres)
+	// ----------------------------------------------------
+	fileServer := http.FileServer(http.Dir("./cmd/static"))
+	r.Handle("/*", fileServer)
 
 	return r
 }
