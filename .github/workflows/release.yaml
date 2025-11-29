@@ -46,6 +46,7 @@ jobs:
           tag_name: ${{ github.ref_name }}
           name: "Release ${{ steps.version.outputs.version }}"
           body: ${{ steps.changelog.outputs.changelog }}
+          files: gotov
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 

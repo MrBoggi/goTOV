@@ -44,12 +44,18 @@ type BrewfatherConfig struct {
 	APIKey string `yaml:"api_key"`
 }
 
+// ServerConfig definerer innstillinger for HTTP-serveren.
+type ServerConfig struct {
+	ListenAddr string `yaml:"listen_addr"`
+}
+
 // Config er toppnivåstrukturen for YAML-konfigurasjonen.
 type Config struct {
 	OPCUA        OPCUAConfig        `yaml:"opcua"`
 	Logging      LoggingConfig      `yaml:"logging"`
 	Fermentation FermentationConfig `yaml:"fermentation"`
 	Brewfather   BrewfatherConfig   `yaml:"brewfather"`
+	Server       ServerConfig       `yaml:"server"`
 }
 
 // Load leser og parser YAML-konfigurasjonen.
@@ -73,6 +79,9 @@ func Load(path string) (*Config, error) {
 	// Defaults
 	if cfg.Fermentation.DatabasePath == "" {
 		cfg.Fermentation.DatabasePath = "data/fermentation.db"
+	}
+	if cfg.Server.ListenAddr == "" {
+		cfg.Server.ListenAddr = ":8080"
 	}
 
 	return &cfg, nil

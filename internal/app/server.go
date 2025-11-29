@@ -4,8 +4,8 @@ import (
 	"context"
 	"os"
 	"os/signal"
+	"sync"
 	"syscall"
-	"time"
 
 	"github.com/MrBoggi/goTOV/internal/api"
 	"github.com/MrBoggi/goTOV/internal/config"
@@ -27,6 +27,7 @@ func RunServer(log zerolog.Logger) error {
 	log.Info().
 		Str("endpoint", cfg.OPCUA.Endpoint).
 		Str("user", cfg.OPCUA.Username).
+		Str("listen_addr", cfg.Server.ListenAddr).
 		Msg("✅ Config loaded")
 
 	// --- OPC UA client ---
@@ -58,17 +59,24 @@ func RunServer(log zerolog.Logger) error {
 	}
 	log.Info().Msgf("🧭 Found %d symbols manually", len(nodes))
 
+	// --- Waitgroup for graceful shutdown ---
+	var wg sync.WaitGroup
+
 	// --- Start HTTP/WS API server ---
 	apiServer := api.NewServer(log, client)
+	wg.Add(1)
 	go func() {
-		if err := apiServer.Start(":8080"); err != nil {
+		defer wg.Done()
+		if err := apiServer.Start(cfg.Server.ListenAddr); err != nil {
 			log.Error().Err(err).Msg("🌐 HTTP/WS server stopped")
 			cancel()
 		}
 	}()
 
 	// --- Start subscription ---
+	wg.Add(1)
 	go func() {
+		defer wg.Done()
 		if err := client.SubscribeAll(ctx, nodes); err != nil {
 			log.Error().Err(err).Msg("❌ Subscription failed")
 			cancel()
@@ -82,7 +90,7 @@ func RunServer(log zerolog.Logger) error {
 	<-stop
 	log.Info().Msg("🛑 Shutting down gracefully...")
 	cancel()
-	time.Sleep(500 * time.Millisecond)
+	wg.Wait() // vent for alle goroutines
 	log.Info().Msg("👋 goTØV backend stopped cleanly")
 
 	return nil
