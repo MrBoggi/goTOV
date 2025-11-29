@@ -17,7 +17,7 @@ cd goTOV
 go mod tidy
 
 # Run backend (OPC UA edge controller)
-go run ./cmd/server
+go run ./cmd/gotov server
 ```
 
 Eksempel output:
@@ -33,8 +33,7 @@ INF Temp_HLT = 133 (type int16)
 
 ```
 goTOV/
-├── cmd/gotov/          # CLI-verktøy (brewfather, fermentation-db, osv.)
-├── cmd/server/         # OPC UA backend (edge controller)
+├── cmd/gotov/          # CLI-verktøy + server (brewfather, fermentation-db, osv.)
 ├── internal/api/       # Web API / WS
 ├── internal/opcua/     # OPC UA klient
 ├── internal/brewfather # Brewfather klient, parser, batch/recipe-funksjoner
@@ -59,26 +58,20 @@ goTOV/
 
 # 📦 Brewfather CLI – Fermentering & Batch-verktøy
 
-goTØV inkluderer et komplett sett CLI‑kommandoer for å jobbe med Brewfather.  
-Dette inkluderer:
+goTØV inkluderer et komplett sett CLI‑kommandoer for å jobbe med Brewfather.
 
-- liste batcher  
-- hente ut recipes  
-- importere fermenteringsprofiler  
-- inspisere lokale fermenteringsplaner  
-- slette / nullstille databasen  
+Kommandoene kan kjøres på to måter:
+1.  **Med `go run`** (enklest for utvikling): `go run ./cmd/gotov <kommando>`
+2.  **Som bygget binærfil** (anbefalt for jevnlig bruk):
+    ```bash
+    # Bygg binærfilen én gang
+    go build -o gotov ./cmd/gotov
 
-Alle kommandoer kjøres slik:
+    # Kjør kommandoer direkte
+    ./gotov <kommando>
+    ```
 
-```bash
-go run ./cmd/gotov <command> [...]
-```
-
-eller bygget:
-
-```bash
-./gotov <command> [...]
-```
+Nedenfor brukes `go run`-metoden for enkelhets skyld.
 
 ---
 
@@ -115,10 +108,10 @@ go run ./cmd/gotov fermentation-import KeRcvtkWQCgXyIC50pQkn1O0dDcY2b
 
 Dette gjør:
 
-1. Henter batch fra Brewfather  
-2. Tar fermenteringssteg fra batch → fallback recipe  
-3. Konverterer time/days → *timer*  
-4. Lagrer planen i **data/fermentation.db**
+1.  Henter batch fra Brewfather
+2.  Tar fermenteringssteg fra batch → fallback recipe
+3.  Konverterer time/days → *timer*
+4.  Lagrer planen i **data/fermentation.db**
 
 Output:
 
@@ -164,15 +157,50 @@ go run ./cmd/gotov fermentation-db clear
 
 ---
 
-## 🔐 Config – Brewfather
+## 🔐 Configuration
 
 I `config/config.yaml`:
 
 ```yaml
+# OPC UA server
+opcua:
+  endpoint: "opc.tcp://192.168.1.10:4840"
+  username: "your-username"
+  password: "your-password"
+
+# Web server
+server:
+  listen_addr: ":8080"
+
+# Brewfather API
 brewfather:
   user_id: "YOUR_USER_ID"
   api_key: "YOUR_API_KEY"
 ```
+
+---
+
+## 🐳 Docker
+
+Prosjektet er fullt ut "dockerized" og kan kjøres med `docker-compose`.
+
+```bash
+# Bygg og start goTOV-containeren
+docker-compose up --build
+```
+
+### Production Stack (TimescaleDB + Grafana)
+
+For produksjon kan du aktivere `production`-profilen som inkluderer TimescaleDB og Grafana:
+
+```bash
+docker-compose --profile production up --build
+```
+
+Dette starter:
+- `gotov`: Applikasjonen (port 8085)
+- `timescaledb`: TimescaleDB database (port 5432)
+- `grafana`: Grafana (port 3000)
 
 ---
 
