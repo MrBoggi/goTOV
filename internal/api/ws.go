@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/MrBoggi/goTOV/internal/opcua"
-	"github.com/MrBoggi/goTOV/internal/version"
+	"github.comcom/MrBoggi/goTOV/internal/version"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/cors"
 	"github.com/gorilla/websocket"

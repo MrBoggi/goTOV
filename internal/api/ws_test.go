@@ -24,5 +24,5 @@ func TestHealthCheckEndpoint(t *testing.T) {
 
 	expected := `{"status":"ok"}` + "\n"
 	assert.Equal(t, expected, rr.Body.String())
-	assert.Equal(t, "application/json", rr.Header().Get("Content-Type"))
+	assert.Equal(t, "application/json", rr.Header().Get("Content-Type")
 }
