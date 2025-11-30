@@ -54,6 +54,8 @@ internal/**/data/
 *.der
 *.crt
 *.key
+.env
+
 
 #############################
 # Node-related (if UI included)
