@@ -93,7 +93,7 @@ func (s *Server) Router() http.Handler {
 	// ----------------------------------------------------
 	// STATIC FILES (INGENTING annet fjernes eller endres)
 	// ----------------------------------------------------
-	fileServer := http.FileServer(http.Dir("./cmd/static"))
+	fileServer := http.FileServer(http.Dir("/app/cmd/static"))
 	r.Handle("/*", fileServer)
 
 	return r
