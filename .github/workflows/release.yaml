@@ -1,78 +1,53 @@
-name: Release
+name: Build and Publish Docker Image
 
 on:
   push:
+    branches:
+      - main
     tags:
       - "v*"
-      - "[0-9]+.[0-9]+.[0-9]+(-[a-zA-Z0-9.-]+)?"
+      - "[0-9]+.[0-9]+.[0-9]"
+      - "[0-9]+.[0-9]+.[0-9]-*
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+permissions:
+  contents: read
+  packages: write
 
 jobs:
-  release:
+  build-and-publish:
     runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout
+      - name: Checkout repository
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
-      - name: Extract version from tag
-        id: version
-        run: |
-          TAG=${GITHUB_REF#refs/tags/}
-          if [[ $TAG == v* ]]; then
-            VERSION=${TAG#v}
-          else
-            VERSION=$TAG
-          fi
-          echo "version=${VERSION}" >> $GITHUB_OUTPUT
-          echo "${VERSION}" > version.txt
-
-      - name: Set up Go
-        uses: actions/setup-go@v5
-        with:
-          go-version: '1.22'
-          cache: true
-
-      - name: Build binary
-        run: |
-          go build -ldflags "-X github.com/MrBoggi/goTOV/internal/version.Version=${{ steps.version.outputs.version }}" \
-            -o gotov ./cmd/gotov/
-
-      - name: Generate changelog
-        id: changelog
-        uses: orhun/git-cliff-action@v4.6.0
-        with:
-          config: cliff.toml
-          args: --latest
-
-      - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ github.ref_name }}
-          name: "Release ${{ steps.version.outputs.version }}"
-          body: ${{ steps.changelog.outputs.changelog }}
-          files: gotov
-        env:
-          GITHUB_TOKEN: ${{ secrets.GHCR_TOKEN }}
-
-      - name: Build Docker image
-        run: |
-          OWNER_LC="${GITHUB_REPOSITORY_OWNER,,}"
-          VERSION="${{ steps.version.outputs.version }}"
-          docker build -t ghcr.io/$OWNER_LC/gotov:latest \
-                       -t ghcr.io/$OWNER_LC/gotov:$VERSION .
-
-      - name: Log in to GHCR
+      - name: Log in to the Container registry
         uses: docker/login-action@v3
         with:
-          registry: ghcr.io
+          registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Push Docker image
-        run: |
-          OWNER_LC="${GITHUB_REPOSITORY_OWNER,,}"
-          VERSION="${{ steps.version.outputs.version }}"
-          docker push ghcr.io/$OWNER_LC/gotov:latest
-          docker push ghcr.io/$OWNER_LC/gotov:$VERSION
+      - name: Extract metadata (tags, labels)
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            # tag with latest on main branch
+            type=raw,value=latest,enable={{is_default_branch}}
+            # tag with git tag value
+            type=ref,event=tag
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            VERSION=${{ github.ref_name }}
