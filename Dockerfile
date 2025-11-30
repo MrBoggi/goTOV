@@ -30,6 +30,9 @@ WORKDIR /app
 RUN mkdir config && chown gotov:gotov config
 COPY --chown=gotov:gotov config/config.example.yaml /app/config/config.yaml
 
+# Copy static web files
+COPY --chown=gotov:gotov cmd/static ./cmd/static
+
 # Copy binary from builder
 COPY --from=builder --chown=gotov:gotov /goTOV .
 
