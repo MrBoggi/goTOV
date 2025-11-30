@@ -19,6 +19,9 @@ RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo \
 # Runtime stage
 FROM alpine:3.20
 
+# Install curl for healthcheck
+RUN apk add --no-cache curl
+
 # Install runtime dependencies
 RUN apk add --no-cache ca-certificates tzdata wget
 
