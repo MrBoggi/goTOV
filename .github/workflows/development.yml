@@ -3,7 +3,7 @@ name: Build and Publish Edge Image
 on:
   push:
     branches:
-      - 'develop'
+      - 'development'
 
 env:
   REGISTRY: ghcr.io
