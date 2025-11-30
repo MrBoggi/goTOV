@@ -40,6 +40,7 @@ require (
 	github.com/mattn/go-colorable v0.1.13 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/spf13/cobra v1.10.1
+	github.com/stretchr/testify v1.11.1
 	golang.org/x/sys v0.36.0 // indirect
 	modernc.org/sqlite v1.40.0
 )
