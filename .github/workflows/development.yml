@@ -42,3 +42,5 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            BUILD_VERSION=edge-sha-${{ slice(github.sha, 0, 7) }}

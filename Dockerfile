@@ -11,8 +11,9 @@ RUN go mod download
 
 # Copy source and build
 COPY . .
+ARG BUILD_VERSION=dev
 RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo \
-    -ldflags="-w -s" \
+    -ldflags="-w -s -X github.com/MrBoggi/goTOV/internal/version.BuildVersion=${BUILD_VERSION}" \
     -o /goTOV ./cmd/gotov/main.go
 
 # Runtime stage
