@@ -8,8 +8,8 @@ Alle endringer skal følge "Feature Branch"-modellen med utgangspunkt i `Develop
 **Fremgangsmåte for hver endring:**
 
 1.  **Starttilstand:** Sørg alltid for at du er på `Development` og har siste versjon.
-    * `git checkout Development`
-    * `git pull origin Development`
+    * `git checkout development`
+    * `git pull origin development`
 2.  **Opprett Branch:** Lag en beskrivende branch for oppgaven.
     * Bruk prefiks: `feature/` for ny funksjonalitet, `fix/` for feilretting, `refactor/` for kodeforbedring.
     * Eks: `git checkout -b feature/ny-login-handler`
@@ -19,7 +19,7 @@ Alle endringer skal følge "Feature Branch"-modellen med utgangspunkt i `Develop
     * `git add .`
     * `git commit -m "feat: beskrivelse av endring"`
 6.  **Merge:** Gå tilbake til Development og flett inn endringene.
-    * `git checkout Development`
+    * `git checkout development`
     * `git merge &lt;branch-navn&gt;`
 7.  **Opprydding:** Slett branchen lokalt etter merge (hvis vellykket).
     * `git branch -d &lt;branch-navn&gt;`

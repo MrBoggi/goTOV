@@ -48,4 +48,4 @@ EXPOSE ${GOTOV_SERVER_PORT}
 HEALTHCHECK --interval=30s --timeout=3s --start-period=30s --retries=3 \
     CMD wget --no-verbose --tries=1 --spider http://localhost:${GOTOV_SERVER_PORT}/health || exit 1
 
-ENTRYPOINT ["./goTOV"]
+ENTRYPOINT ["./goTOV", "server"]
