@@ -3,23 +3,23 @@ name: Build and Publish Docker Image
 on:
   push:
     branches:
-      - main
+      - 'main'
     tags:
-      - "v*"
-      - "[0-9]+.[0-9]+.[0-9]"
-      - "[0-9]+.[0-9]+.[0-9]-*
+      - 'v*'
+      - '*.*.*'
+      - '*.*.*-*'
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository }}
-
-permissions:
-  contents: read
-  packages: write
+  IMAGE_NAME: ghcr.io/mrboggi/gotov
 
 jobs:
-  build-and-publish:
+  build-and-push:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -35,12 +35,14 @@ jobs:
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          images: ${{ env.IMAGE_NAME }}
           tags: |
-            # tag with latest on main branch
+            # set latest tag for default branch
             type=raw,value=latest,enable={{is_default_branch}}
-            # tag with git tag value
+            # use git tag as docker tag
             type=ref,event=tag
+            # support semver
+            type=semver,pattern={{version}}
 
       - name: Build and push Docker image
         uses: docker/build-push-action@v6
@@ -49,5 +51,3 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          build-args: |
-            VERSION=${{ github.ref_name }}
