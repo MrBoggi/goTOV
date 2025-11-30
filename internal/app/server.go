@@ -10,13 +10,14 @@ import (
 	"github.com/MrBoggi/goTOV/internal/api"
 	"github.com/MrBoggi/goTOV/internal/config"
 	"github.com/MrBoggi/goTOV/internal/opcua"
+	"github.com/MrBoggi/goTOV/internal/version"
 	"github.com/rs/zerolog"
 )
 
 // RunServer starter hele goTØV-backend (OPC UA, HTTP/WS, subscription)
 // og blokker til prosessen får SIGINT/SIGTERM.
 func RunServer(log zerolog.Logger) error {
-	log.Info().Msg("🚀 Starting goTØV backend")
+	log.Info().Str("version", version.Get()).Msg("🚀 Starting goTØV backend")
 
 	// --- Load config ---
 	cfg, err := config.Load("")

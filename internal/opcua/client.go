@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"strings"
 	"time"
 
 	"github.com/gopcua/opcua"
@@ -30,6 +31,9 @@ type TagUpdate struct {
 
 // NewClient creates an OPC UA client supporting both Anonymous and Username/Password authentication.
 func NewClient(endpoint, username, password string, log zerolog.Logger) (*Client, error) {
+	if strings.Contains(endpoint, "<ip_or_hostname>") {
+		return nil, fmt.Errorf("OPC UA endpoint is not configured: found placeholder '<ip_or_hostname>'. Please update your configuration (e.g., config.yaml or GOTOV_OPCUA_ENDPOINT) with the correct server address")
+	}
 	ctx := context.Background()
 
 	// --- Discover endpoints ---

@@ -1,18 +1,16 @@
-name: Build and Publish Docker Image
+name: Build and Publish Edge Image
 
 on:
   push:
-    tags:
-      - 'v*'
-      - '*.*.*'
-      - '*.*.*-*'
+    branches:
+      - 'development'
 
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: ghcr.io/mrboggi/gotov
 
 jobs:
-  build-and-push:
+  build-and-push-edge:
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -35,12 +33,11 @@ jobs:
         with:
           images: ${{ env.IMAGE_NAME }}
           tags: |
-            # set latest tag for default branch
-            type=raw,value=latest,enable={{is_default_branch}}
-            # use git tag as docker tag
-            type=ref,event=tag
-            # support semver
-            type=semver,pattern={{version}}
+            type=raw,value=edge,enable=true
+
+      - name: Get short SHA
+        id: vars
+        run: echo "sha_short=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
 
       - name: Build and push Docker image
         uses: docker/build-push-action@v6
@@ -49,3 +46,5 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            BUILD_VERSION=edge-sha-${{ steps.vars.outputs.sha_short }}

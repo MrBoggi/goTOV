@@ -1,9 +1,13 @@
 name: CI
 
 on:
+  push:
+    branches:
+      - 'feature/**'
   pull_request:
     branches:
-      - main
+      - 'development'
+      - 'main'
 
 jobs:
   ci-checks:
@@ -36,3 +40,6 @@ jobs:
 
       - name: Run tests
         run: go test -v ./...
+
+      - name: Build
+        run: go build -v ./...
