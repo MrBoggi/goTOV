@@ -26,6 +26,10 @@ RUN addgroup -S gotov && adduser -S -G gotov gotov
 
 WORKDIR /app
 
+# Create config directory and set ownership, then copy in default config
+RUN mkdir config && chown gotov:gotov config
+COPY --chown=gotov:gotov config/config.example.yaml /app/config/config.yaml
+
 # Copy binary from builder
 COPY --from=builder --chown=gotov:gotov /goTOV .
 

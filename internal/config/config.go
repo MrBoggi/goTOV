@@ -2,86 +2,102 @@ package config
 
 import (
 	"fmt"
-	"os"
+	"strings"
 
-	"gopkg.in/yaml.v3"
+	"github.com/spf13/viper"
 )
-
-// DefaultConfigPath brukes hvis ingen sti oppgis i kall til Load().
-const DefaultConfigPath = "config/config.yaml"
 
 // OPCUAConfig holder OPC UA-relaterte innstillinger.
 type OPCUAConfig struct {
-	Endpoint string `yaml:"endpoint"`
-	Username string `yaml:"username"`
-	Password string `yaml:"password"`
+	Endpoint string `mapstructure:"endpoint"`
+	Username string `mapstructure:"username"`
+	Password string `mapstructure:"password"`
 }
 
 // LoggingConfig definerer loggnivå og andre loggerinnstillinger.
 type LoggingConfig struct {
-	Level string `yaml:"level"`
+	Level string `mapstructure:"level"`
 }
 
 // FermentationConfig – alt som gjelder gjæring.
 type FermentationConfig struct {
-	Enabled bool `yaml:"enabled"`
+	Enabled bool `mapstructure:"enabled"`
 
 	Hysteresis struct {
-		Cooling float64 `yaml:"cooling"`
-		Heating float64 `yaml:"heating"`
-	} `yaml:"hysteresis"`
+		Cooling float64 `mapstructure:"cooling"`
+		Heating float64 `mapstructure:"heating"`
+	} `mapstructure:"hysteresis"`
 
-	StepCheckInterval string `yaml:"step_check_interval"`
-	StabilizationTime string `yaml:"stabilization_time"`
+	StepCheckInterval string `mapstructure:"step_check_interval"`
+	StabilizationTime string `mapstructure:"stabilization_time"`
 
 	// Hvor vi lagrer lokal fermenterings-DB.
-	DatabasePath string `yaml:"database_path"`
+	DatabasePath string `mapstructure:"database_path"`
 }
 
 // BrewfatherConfig – API-nøklene.
 type BrewfatherConfig struct {
-	UserID string `yaml:"user_id"`
-	APIKey string `yaml:"api_key"`
+	UserID string `mapstructure:"user_id"`
+	APIKey string `mapstructure:"api_key"`
 }
 
 // ServerConfig definerer innstillinger for HTTP-serveren.
 type ServerConfig struct {
-	ListenAddr string `yaml:"listen_addr"`
+	ListenAddr string `mapstructure:"listen_addr"`
 }
 
 // Config er toppnivåstrukturen for YAML-konfigurasjonen.
 type Config struct {
-	OPCUA        OPCUAConfig        `yaml:"opcua"`
-	Logging      LoggingConfig      `yaml:"logging"`
-	Fermentation FermentationConfig `yaml:"fermentation"`
-	Brewfather   BrewfatherConfig   `yaml:"brewfather"`
-	Server       ServerConfig       `yaml:"server"`
+	OPCUA        OPCUAConfig        `mapstructure:"opcua"`
+	Logging      LoggingConfig      `mapstructure:"logging"`
+	Fermentation FermentationConfig `mapstructure:"fermentation"`
+	Brewfather   BrewfatherConfig   `mapstructure:"brewfather"`
+	Server       ServerConfig       `mapstructure:"server"`
 }
 
-// Load leser og parser YAML-konfigurasjonen.
-// Hvis path er tom, brukes DefaultConfigPath.
+// Load leser konfigurasjon fra fil og overstyrer med miljøvariabler.
+// Eksempel: `opcua.endpoint` kan settes med env-var `GOTOV_OPCUA_ENDPOINT`.
 func Load(path string) (*Config, error) {
-	if path == "" {
-		path = DefaultConfigPath
+	v := viper.New()
+
+	// 1. Sett standardverdier
+	v.SetDefault("logging.level", "info")
+	v.SetDefault("server.listen_addr", ":8085")
+	v.SetDefault("fermentation.enabled", true)
+	v.SetDefault("fermentation.database_path", "data/fermentation.db")
+	v.SetDefault("fermentation.hysteresis.cooling", 0.3)
+	v.SetDefault("fermentation.hysteresis.heating", 0.3)
+	v.SetDefault("fermentation.step_check_interval", "30s")
+	v.SetDefault("fermentation.stabilization_time", "10m")
+
+	// 2. Konfigurer lesing fra fil
+	if path != "" {
+		v.SetConfigFile(path) // Bruk spesifikk fil hvis oppgitt
+	} else {
+		v.AddConfigPath("/app/config") // For Docker
+		v.AddConfigPath("config")      // For lokal kjøring
+		v.AddConfigPath(".")           // For enkelhet
+		v.SetConfigName("config")
+		v.SetConfigType("yaml")
 	}
 
-	file, err := os.Open(path)
-	if err != nil {
-		return nil, fmt.Errorf("unable to open config file %q: %w", path, err)
-	}
-	defer file.Close()
+	// 3. Konfigurer lesing fra miljøvariabler
+	v.SetEnvPrefix("GOTOV")
+	v.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
+	v.AutomaticEnv()
 
+	// 4. Les konfigurasjonen
+	if err := v.ReadInConfig(); err != nil {
+		// Feil hvis filen er funnet, men ikke kan leses. Ignorer hvis filen ikke finnes.
+		if _, ok := err.(viper.ConfigFileNotFoundError); !ok {
+			return nil, fmt.Errorf("failed to read config file: %w", err)
+		}
+	}
+
+	// 5. Unmarshal til struct
 	var cfg Config
-	if err := yaml.NewDecoder(file).Decode(&cfg); err != nil {
-		return nil, fmt.Errorf("failed to parse config file %q: %w", path, err)
-	}
-
-	// Defaults
-	if cfg.Fermentation.DatabasePath == "" {
-		cfg.Fermentation.DatabasePath = "data/fermentation.db"
-	}
-	if cfg.Server.ListenAddr == "" {
-		cfg.Server.ListenAddr = ":8080"
+	if err := v.Unmarshal(&cfg); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal config: %w", err)
 	}
 
 	return &cfg, nil
