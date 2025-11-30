@@ -205,7 +205,9 @@
     }
 
     function connectWS() {
-      const ws = new WebSocket("ws://localhost:8080/api/stream/tags");
+      const wsProtocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+      const wsUrl = `${wsProtocol}//${window.location.host}/api/stream/tags`;
+      const ws = new WebSocket(wsUrl);
       ws.onopen = () => { statusEl.textContent = "✅ Connected"; statusEl.className = "status ok"; };
       ws.onmessage = (e) => {
         const msg = JSON.parse(e.data);
@@ -229,7 +231,7 @@
         const newValue = !isOn;
         setButtonState(tag, newValue);
         try {
-          await fetch("http://localhost:8080/api/write", {
+          await fetch("/api/write", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ tag, value: newValue }),
