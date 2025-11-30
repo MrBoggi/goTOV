@@ -44,14 +44,14 @@ services:
     # Du overstyrer bare det du trenger å endre.
     #
     # Eksempel for Portainer-stack eller docker-compose.yml:
-    # environment:
-    #   - GOTOV_OPCUA_ENDPOINT=opc.tcp://192.168.10.150:4840
-    #   - GOTOV_OPCUA_USERNAME=MyUser
-    #   - GOTOV_OPCUA_PASSWORD=MySecret
-    #   - GOTOV_BREWFATHER_API_KEY=xxxxx
-    #   - GOTOV_BREWFATHER_USER_ID=yyyyy
-    #   - GOTOV_LOGGING_LEVEL=debug
+    # Miljøvariabler fylles nå inn via substitusjon fra Portainer UI.
     environment:
+      - GOTOV_OPCUA_ENDPOINT=${GOTOV_OPCUA_ENDPOINT}
+      - GOTOV_OPCUA_USERNAME=${GOTOV_OPCUA_USERNAME}
+      - GOTOV_OPCUA_PASSWORD=${GOTOV_OPCUA_PASSWORD}
+      - GOTOV_BREWFATHER_API_KEY=${GOTOV_BREWFATHER_API_KEY}
+      - GOTOV_BREWFATHER_USER_ID=${GOTOV_BREWFATHER_USER_ID}
+      - GOTOV_LOGGING_LEVEL=${GOTOV_LOGGING_LEVEL:-info} # Bruker 'info' hvis ikke satt
       - TZ=Europe/Oslo
     volumes:
       - gotov_data:/app/data # App-data som f.eks. fermenteringsdatabase
