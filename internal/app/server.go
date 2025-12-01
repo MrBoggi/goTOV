@@ -9,6 +9,7 @@ import (
 
 	"github.com/MrBoggi/goTOV/internal/api"
 	"github.com/MrBoggi/goTOV/internal/config"
+	"github.com/MrBoggi/goTOV/internal/fermentation"
 	"github.com/MrBoggi/goTOV/internal/opcua"
 	"github.com/MrBoggi/goTOV/internal/version"
 	"github.com/rs/zerolog"
@@ -63,8 +64,19 @@ func RunServer(log zerolog.Logger) error {
 	// --- Waitgroup for graceful shutdown ---
 	var wg sync.WaitGroup
 
+	// --- Fermentation store ---
+	fermentationStore, err := fermentation.NewSQLiteStore(cfg.Fermentation.DatabasePath)
+	if err != nil {
+		log.Error().Err(err).Msg("❌ Failed to create fermentation store")
+		return err
+	}
+	defer func() {
+		_ = fermentationStore.Close()
+		log.Info().Msg("📂 Fermentation store closed")
+	}()
+
 	// --- Start HTTP/WS API server ---
-	apiServer := api.NewServer(log, client)
+	apiServer := api.NewServer(log, client, fermentationStore)
 	wg.Add(1)
 	go func() {
 		defer wg.Done()

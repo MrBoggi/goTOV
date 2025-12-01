@@ -31,9 +31,8 @@ services:
       - gotaplist_net
 
   gotov:
-    image: ghcr.io/mrboggi/gotov:latest
+    build: .
     container_name: gotov
-    command: ["server"] # Sørger for at serveren faktisk starter
     restart: unless-stopped
     ports:
       - "18085:8085" # Intern port 8085 (fra Dockerfile) mappes til 18085 på host

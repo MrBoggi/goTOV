@@ -2,6 +2,9 @@ package fermentation
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
+	"time"
 
 	"github.com/jmoiron/sqlx"
 	_ "modernc.org/sqlite"
@@ -11,7 +14,17 @@ type SQLiteStore struct {
 	DB *sqlx.DB
 }
 
+var _ FermentationStore = (*SQLiteStore)(nil)
+
 func NewSQLiteStore(path string) (*SQLiteStore, error) {
+	// Ensure the directory for the database file exists.
+	dir := filepath.Dir(path)
+	if _, err := os.Stat(dir); os.IsNotExist(err) {
+		if err := os.MkdirAll(dir, 0755); err != nil {
+			return nil, fmt.Errorf("create directory for sqlite db: %w", err)
+		}
+	}
+
 	db, err := sqlx.Open("sqlite", path)
 	if err != nil {
 		return nil, fmt.Errorf("open sqlite: %w", err)
@@ -49,6 +62,19 @@ CREATE TABLE IF NOT EXISTS fermentation_steps (
     type TEXT,
     FOREIGN KEY(plan_id) REFERENCES fermentation_plans(id)
 );
+
+CREATE TABLE IF NOT EXISTS fermentation_states (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    plan_id INTEGER NOT NULL,
+	batch_id TEXT NOT NULL,
+    tank_no INTEGER NOT NULL,
+    step_index INTEGER NOT NULL,
+    started_at TEXT NOT NULL,
+    step_started_at TEXT NOT NULL,
+    target_temp REAL NOT NULL,
+    status TEXT NOT NULL,
+    FOREIGN KEY(plan_id) REFERENCES fermentation_plans(id)
+);
 `
 	_, err := s.DB.Exec(schema)
 	return err
@@ -77,4 +103,49 @@ VALUES (?, ?, ?, ?, ?, ?)`,
 		}
 	}
 	return planID, nil
+}
+
+
+
+func (s *SQLiteStore) StartFermentation(planID int64, tankID string) (int64, error) {
+	var plan FermentationPlan
+	err := s.DB.Get(&plan, "SELECT id, name, recipe_id, total_steps FROM fermentation_plans WHERE id = ?", planID)
+	if err != nil {
+		return 0, fmt.Errorf("get plan for starting fermentation: %w", err)
+	}
+
+	var steps []FermentationStep
+	err = s.DB.Select(&steps, "SELECT step_number, temperature, duration_hours, description, type FROM fermentation_steps WHERE plan_id = ? ORDER BY step_number ASC", planID)
+	if err != nil {
+		return 0, fmt.Errorf("get steps for starting fermentation: %w", err)
+	}
+	plan.Steps = steps
+
+	if len(plan.Steps) == 0 {
+		return 0, fmt.Errorf("fermentation plan %d has no steps", planID)
+	}
+
+	now := time.Now().UTC()
+	initialState := FermentationState{
+		PlanID:        planID,
+		BatchID:       fmt.Sprintf("BATCH-%s-%d", tankID, planID), // Placeholder for BatchID
+		TankNo:        1,                                          // Placeholder for TankNo, needs proper parsing from tankID
+		StepIndex:     0,
+		StartedAt:     now.Format(time.RFC3339),
+		StepStartedAt: now.Format(time.RFC3339),
+		TargetTemp:    plan.Steps[0].Temperature,
+		Status:        "RUNNING",
+	}
+
+	res, err := s.DB.Exec(`
+INSERT INTO fermentation_states (plan_id, batch_id, tank_no, step_index, started_at, step_started_at, target_temp, status)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+		initialState.PlanID, initialState.BatchID, initialState.TankNo, initialState.StepIndex,
+		initialState.StartedAt, initialState.StepStartedAt, initialState.TargetTemp, initialState.Status)
+	if err != nil {
+		return 0, fmt.Errorf("insert fermentation state: %w", err)
+	}
+
+	fermentationID, _ := res.LastInsertId()
+	return fermentationID, nil
 }

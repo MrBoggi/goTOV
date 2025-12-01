@@ -49,7 +49,7 @@ var fermentationListStepsCmd = &cobra.Command{
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 
-		planID, err := strconv.Atoi(args[0])
+		planID, err := strconv.ParseInt(args[0], 10, 64)
 		if err != nil {
 			return fmt.Errorf("invalid plan id: %w", err)
 		}
