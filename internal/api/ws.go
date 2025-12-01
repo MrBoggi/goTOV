@@ -95,6 +95,7 @@ func (s *Server) Router() http.Handler {
 	r.Get("/api/tags", s.handleSnapshot)
 	r.Post("/api/write", s.handleWrite)
 	r.Post("/api/fermentation/plan", s.handleSaveFermentationPlan)
+	r.Get("/api/fermentation/plan", s.handleListFermentationPlans) // Alias for plural
 	r.Get("/api/fermentation/plans", s.handleListFermentationPlans)
 	r.Post("/api/fermentation/start", s.handleStartFermentation)
 	r.Get("/api/tanks", s.handleListTanks)
