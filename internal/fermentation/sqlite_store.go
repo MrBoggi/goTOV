@@ -95,24 +95,7 @@ VALUES (?, ?, ?, ?, ?, ?)`,
 	return planID, nil
 }
 
-func (s *SQLiteStore) ListPlans() ([]FermentationPlan, error) {
-	var plans []FermentationPlan
-	err := s.DB.Select(&plans, "SELECT id, name, recipe_id, total_steps FROM fermentation_plans")
-	if err != nil {
-		return nil, fmt.Errorf("select plans: %w", err)
-	}
 
-	for i := range plans {
-		var steps []FermentationStep
-		err := s.DB.Select(&steps, "SELECT step_number, temperature, duration_hours, description, type FROM fermentation_steps WHERE plan_id = ?", plans[i].ID)
-		if err != nil {
-			return nil, fmt.Errorf("select steps for plan %d: %w", plans[i].ID, err)
-		}
-		plans[i].Steps = steps
-	}
-
-	return plans, nil
-}
 
 func (s *SQLiteStore) StartFermentation(planID int64, tankID string) (int64, error) {
 	var plan FermentationPlan

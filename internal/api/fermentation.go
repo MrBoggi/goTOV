@@ -3,6 +3,8 @@ package api
 import (
 	"encoding/json"
 	"net/http"
+
+	"github.com/MrBoggi/goTOV/internal/fermentation"
 )
 
 type StartFermentationRequest struct {
