@@ -11,6 +11,8 @@ type SQLiteStore struct {
 	DB *sqlx.DB
 }
 
+var _ FermentationStore = (*SQLiteStore)(nil)
+
 func NewSQLiteStore(path string) (*SQLiteStore, error) {
 	db, err := sqlx.Open("sqlite", path)
 	if err != nil {

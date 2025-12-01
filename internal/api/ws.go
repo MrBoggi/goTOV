@@ -6,6 +6,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/MrBoggi/goTOV/internal/fermentation"
 	"github.com/MrBoggi/goTOV/internal/opcua"
 	"github.com/MrBoggi/goTOV/internal/version"
 	"github.com/go-chi/chi/v5"
@@ -15,8 +16,9 @@ import (
 )
 
 type Server struct {
-	log    zerolog.Logger
-	client *opcua.Client
+	log               zerolog.Logger
+	client            *opcua.Client
+	fermentationStore fermentation.FermentationStore
 
 	// Connected websocket clients
 	mu          sync.RWMutex
@@ -38,12 +40,13 @@ type WSMessage struct {
 }
 
 // NewServer initializes the WS/HTTP server and listens for OPC UA updates
-func NewServer(log zerolog.Logger, client *opcua.Client) *Server {
+func NewServer(log zerolog.Logger, client *opcua.Client, fermentationStore fermentation.FermentationStore) *Server {
 	s := &Server{
-		log:         log,
-		client:      client,
-		subscribers: make(map[*websocket.Conn]bool),
-		latest:      make(map[string]WSMessage),
+		log:               log,
+		client:            client,
+		fermentationStore: fermentationStore,
+		subscribers:       make(map[*websocket.Conn]bool),
+		latest:            make(map[string]WSMessage),
 		upgrader: websocket.Upgrader{
 			ReadBufferSize:  1024,
 			WriteBufferSize: 1024,
@@ -91,6 +94,7 @@ func (s *Server) Router() http.Handler {
 	r.Get("/api/stream/tags", s.handleWS)
 	r.Get("/api/tags", s.handleSnapshot)
 	r.Post("/api/write", s.handleWrite)
+	r.Post("/api/fermentation/plan", s.handleSaveFermentationPlan)
 
 	// ----------------------------------------------------
 	// STATIC FILES (INGENTING annet fjernes eller endres)
