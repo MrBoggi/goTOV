@@ -65,7 +65,7 @@ func RunServer(log zerolog.Logger) error {
 	var wg sync.WaitGroup
 
 	// --- Fermentation store ---
-	fermentationStore, err := fermentation.NewSQLiteStore("fermentation.db")
+	fermentationStore, err := fermentation.NewSQLiteStore(cfg.Fermentation.DatabasePath)
 	if err != nil {
 		log.Error().Err(err).Msg("❌ Failed to create fermentation store")
 		return err
