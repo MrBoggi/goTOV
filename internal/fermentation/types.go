@@ -20,6 +20,8 @@ type FermentationPlan struct {
 
 // Til bruk av prosessmotoren (kommer senere)
 type FermentationState struct {
+	ID            int64   `db:"id"`
+	PlanID        int64   `db:"plan_id"`
 	BatchID       string  `db:"batch_id"`
 	TankNo        int     `db:"tank_no"`
 	StepIndex     int     `db:"step_index"`

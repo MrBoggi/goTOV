@@ -377,6 +377,177 @@ goTØV provides a RESTful API and a WebSocket stream for interacting with the sy
         {"status": "ok", "planID": 123}
         ```
 
+*   **`GET /api/fermentation/plans`**
+    *   **Description:** Returns a list of all stored fermentation plans.
+    *   **Method:** `GET`
+    *   **Response:** An array of fermentation plan objects.
+        ```json
+        [
+            {
+                "id": 123,
+                "name": "IPA Fermentation Profile",
+                "recipe_id": "IPA_001",
+                "total_steps": 2,
+                "steps": [
+                    {"step_number": 1, "temperature": 19.0, "duration_hours": 120.0, "description": "Active Fermentation", "type": "Ferment"},
+                    {"step_number": 2, "temperature": 3.0, "duration_hours": 48.0, "description": "Dry Hop + Cold Crash", "type": "Condition"}
+                ]
+            }
+        ]
+        ```
+    *   **Example (curl):**
+        ```bash
+        curl http://localhost:8080/api/fermentation/plans
+        ```
+    *   **Example Response:**
+        ```json
+        [
+            {
+                "id": 1,
+                "name": "My Custom Fermentation Plan",
+                "recipe_id": "CUSTOM_RECIPE_001",
+                "total_steps": 2,
+                "steps": [
+                    {"step_number": 1, "temperature": 18.5, "duration_hours": 72, "description": "Primary Fermentation", "type": "Ferment"},
+                    {"step_number": 2, "temperature": 2, "duration_hours": 48, "description": "Cold Crash", "type": "Condition"}
+                ]
+            }
+        ]
+        ```
+
+### Fermentation Plan Management
+
+*   **`POST /api/fermentation/plan`**
+    *   **Description:** Creates and saves a new fermentation plan.
+    *   **Method:** `POST`
+    *   **Request Body (JSON):**
+        ```json
+        {
+            "name": "My Custom Fermentation Plan",
+            "recipe_id": "CUSTOM_RECIPE_001",
+            "steps": [
+                {
+                    "step_number": 1,
+                    "temperature": 18.5,
+                    "duration_hours": 72.0,
+                    "description": "Primary Fermentation",
+                    "type": "Ferment"
+                },
+                {
+                    "step_number": 2,
+                    "temperature": 2.0,
+                    "duration_hours": 48.0,
+                    "description": "Cold Crash",
+                    "type": "Condition"
+                }
+            ]
+        }
+        ```
+    *   **Response:** `{"status": "ok", "planID": <id>}` (JSON) on success, where `<id>` is the ID of the newly created plan.
+    *   **Example (curl):**
+        ```bash
+        curl -X POST -H "Content-Type: application/json" \
+             -d '{
+                 "name": "IPA Fermentation Profile",
+                 "recipe_id": "IPA_001",
+                 "steps": [
+                     {"step_number": 1, "temperature": 19.0, "duration_hours": 120.0, "description": "Active Fermentation", "type": "Ferment"},
+                     {"step_number": 2, "temperature": 3.0, "duration_hours": 48.0, "description": "Dry Hop + Cold Crash", "type": "Condition"}
+                 ]
+             }' \
+             http://localhost:8080/api/fermentation/plan
+        ```
+    *   **Example Response:**
+        ```json
+        {"status": "ok", "planID": 123}
+        ```
+
+*   **`GET /api/fermentation/plans`**
+    *   **Description:** Returns a list of all stored fermentation plans.
+    *   **Method:** `GET`
+    *   **Response:** An array of fermentation plan objects.
+        ```json
+        [
+            {
+                "id": 123,
+                "name": "IPA Fermentation Profile",
+                "recipe_id": "IPA_001",
+                "total_steps": 2,
+                "steps": [
+                    {"step_number": 1, "temperature": 19.0, "duration_hours": 120.0, "description": "Active Fermentation", "type": "Ferment"},
+                    {"step_number": 2, "temperature": 3.0, "duration_hours": 48.0, "description": "Dry Hop + Cold Crash", "type": "Condition"}
+                ]
+            }
+        ]
+        ```
+    *   **Example (curl):**
+        ```bash
+        curl http://localhost:8080/api/fermentation/plans
+        ```
+    *   **Example Response:**
+        ```json
+        [
+            {
+                "id": 1,
+                "name": "My Custom Fermentation Plan",
+                "recipe_id": "CUSTOM_RECIPE_001",
+                "total_steps": 2,
+                "steps": [
+                    {"step_number": 1, "temperature": 18.5, "duration_hours": 72, "description": "Primary Fermentation", "type": "Ferment"},
+                    {"step_number": 2, "temperature": 2, "duration_hours": 48, "description": "Cold Crash", "type": "Condition"}
+                ]
+            }
+        ]
+        ```
+
+*   **`POST /api/fermentation/start`**
+    *   **Description:** Starts a fermentation process on a specific tank using an existing fermentation plan.
+    *   **Method:** `POST`
+    *   **Request Body (JSON):**
+        ```json
+        {
+            "planID": 123,
+            "tankID": "TANK_ALPHA_001"
+        }
+        ```
+    *   **Response:** `{"status": "ok", "fermentationID": <id>}` (JSON) on success, where `<id>` is the ID of the newly started fermentation.
+    *   **Example (curl):**
+        ```bash
+        curl -X POST -H "Content-Type: application/json" \
+             -d '{"planID": 1, "tankID": "TANK_001"}' \
+             http://localhost:8080/api/fermentation/start
+        ```
+    *   **Example Response:**
+        ```json
+        {"status": "ok", "fermentationID": 456}
+        ```
+
+### Tank Management
+
+*   **`GET /api/tanks`**
+    *   **Description:** Returns a list of available tank IDs.
+    *   **Method:** `GET`
+    *   **Response:** An array of strings, where each string is a tank ID.
+        ```json
+        [
+            "TANK_ALPHA_001",
+            "TANK_BETA_002",
+            "TANK_GAMMA_003"
+        ]
+        ```
+    *   **Example (curl):**
+        ```bash
+        curl http://localhost:8080/api/tanks
+        ```
+    *   **Example Response:**
+        ```json
+        [
+            "TANK_ALPHA_001",
+            "TANK_BETA_002",
+            "TANK_GAMMA_003"
+        ]
+        ```
+
 ### Real-time Tag Stream (WebSocket)
 
 *   **`GET /api/stream/tags`**
