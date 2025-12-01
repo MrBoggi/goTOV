@@ -19,8 +19,8 @@ RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo \
 # Runtime stage
 FROM alpine:3.20
 
-# Install curl for healthcheck
-RUN apk add --no-cache curl
+# Install curl for healthcheck and su-exec for privilege dropping
+RUN apk add --no-cache curl su-exec
 
 # Install runtime dependencies
 RUN apk add --no-cache ca-certificates tzdata wget
@@ -30,8 +30,8 @@ RUN addgroup -S gotov && adduser -S -G gotov gotov
 
 WORKDIR /app
 
-# Create config directory and set ownership, then copy in default config
-RUN mkdir config && chown gotov:gotov config
+# Create config and data directories and set ownership
+RUN mkdir config data && chown gotov:gotov config data
 COPY --chown=gotov:gotov config/config.example.yaml /app/config/config.yaml
 
 # Copy static web files
@@ -40,8 +40,9 @@ COPY --chown=gotov:gotov cmd/static ./cmd/static
 # Copy binary from builder
 COPY --from=builder --chown=gotov:gotov /goTOV .
 
-# Switch to non-root user
-USER gotov
+# Copy entrypoint script
+COPY scripts/docker-entrypoint.sh /usr/local/bin/
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 
 # Configuration
 ENV GOTOV_SERVER_PORT=8085
@@ -51,4 +52,5 @@ EXPOSE ${GOTOV_SERVER_PORT}
 HEALTHCHECK --interval=30s --timeout=3s --start-period=30s --retries=3 \
     CMD curl --fail http://localhost:8085/health || exit 1
 
-ENTRYPOINT ["./goTOV", "server"]
+ENTRYPOINT ["docker-entrypoint.sh"]
+CMD ["./goTOV", "server"]

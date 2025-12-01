@@ -2,6 +2,8 @@ package fermentation
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/jmoiron/sqlx"
@@ -15,6 +17,14 @@ type SQLiteStore struct {
 var _ FermentationStore = (*SQLiteStore)(nil)
 
 func NewSQLiteStore(path string) (*SQLiteStore, error) {
+	// Ensure the directory for the database file exists.
+	dir := filepath.Dir(path)
+	if _, err := os.Stat(dir); os.IsNotExist(err) {
+		if err := os.MkdirAll(dir, 0755); err != nil {
+			return nil, fmt.Errorf("create directory for sqlite db: %w", err)
+		}
+	}
+
 	db, err := sqlx.Open("sqlite", path)
 	if err != nil {
 		return nil, fmt.Errorf("open sqlite: %w", err)
