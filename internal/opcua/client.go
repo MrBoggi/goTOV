@@ -175,7 +175,8 @@ func (c *Client) WriteTag(ctx context.Context, nodeID string, value interface{})
 				NodeID:      id,
 				AttributeID: ua.AttributeIDValue,
 				Value: &ua.DataValue{
-					Value: ua.MustVariant(value),
+					EncodingMask: ua.DataValueValue,
+					Value:        ua.MustVariant(value),
 				},
 			},
 		},

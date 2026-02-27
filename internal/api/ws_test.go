@@ -24,6 +24,7 @@ type MockFermentationStore struct {
 	StartFermentationFunc       func(planID int64, tankID string, batchID string) (int64, error)
 	ListActiveFermentationsFunc func() ([]fermentation.FermentationState, error)
 	UpdateStateFunc             func(state fermentation.FermentationState) error
+	LogDataFunc                 func(planID int64, tankID string, batchID string, temp float32, target float32, valve bool, jacket bool) error
 }
 
 func (m *MockFermentationStore) SavePlan(plan fermentation.FermentationPlan) (int64, error) {
@@ -75,6 +76,13 @@ func (m *MockFermentationStore) ListActiveFermentations() ([]fermentation.Fermen
 func (m *MockFermentationStore) UpdateState(state fermentation.FermentationState) error {
 	if m.UpdateStateFunc != nil {
 		return m.UpdateStateFunc(state)
+	}
+	return nil
+}
+
+func (m *MockFermentationStore) LogData(planID int64, tankID string, batchID string, temp float32, target float32, valve bool, jacket bool) error {
+	if m.LogDataFunc != nil {
+		return m.LogDataFunc(planID, tankID, batchID, temp, target, valve, jacket)
 	}
 	return nil
 }
