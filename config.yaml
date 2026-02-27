@@ -1,0 +1,30 @@
+# Default configuration for goTOV.
+# This file is copied to config.yaml inside the Docker image.
+# All values can be overridden by environment variables.
+# For example, `opcua.endpoint` can be set by the env var `GOTOV_OPCUA_ENDPOINT`.
+
+opcua:
+  endpoint: "opc.tcp://192.168.10.150:4840"
+  username: "Administrator"
+  password: "9R3NzPjy"
+
+logging:
+  level: "info" # "debug" is also a good option
+
+server:
+  listen_addr: ":8085"
+
+fermentation:
+  enabled: true
+  database_path: "data/fermentation.db" # Path inside the container
+
+  hysteresis:
+    cooling: 0.3
+    heating: 0.3
+
+  step_check_interval: "30s"
+  stabilization_time: "10m"
+
+brewfather:
+  user_id: "" # Your Brewfather User ID
+  api_key: "" # Your Brewfather API Key

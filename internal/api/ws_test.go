@@ -23,6 +23,7 @@ type MockFermentationStore struct {
 	UpdateStateFunc             func(state fermentation.FermentationState) error
 	ListStepsFunc               func(planID int64) ([]fermentation.FermentationStep, error)
 	ClearFunc                   func() error
+	DeletePlanFunc              func(id int64) error
 }
 
 func (m *MockFermentationStore) SavePlan(plan fermentation.FermentationPlan) (int64, error) {
@@ -81,6 +82,13 @@ func (m *MockFermentationStore) UpdateState(state fermentation.FermentationState
 func (m *MockFermentationStore) Clear() error {
 	if m.ClearFunc != nil {
 		return m.ClearFunc()
+	}
+	return nil
+}
+
+func (m *MockFermentationStore) DeletePlan(id int64) error {
+	if m.DeletePlanFunc != nil {
+		return m.DeletePlanFunc(id)
 	}
 	return nil
 }
@@ -226,4 +234,56 @@ func TestListTanksEndpoint(t *testing.T) {
 	err = json.Unmarshal(rr.Body.Bytes(), &actualTanks)
 	assert.NoError(t, err)
 	assert.Len(t, actualTanks, 2)
+}
+
+func TestDeleteFermentationPlanEndpoint(t *testing.T) {
+	log := logger.New()
+
+	t.Run("Successful Deletion", func(t *testing.T) {
+		mockStore := &MockFermentationStore{
+			DeletePlanFunc: func(id int64) error {
+				assert.Equal(t, int64(123), id)
+				return nil
+			},
+		}
+		server := NewServer(log, nil, mockStore, nil)
+		req, _ := http.NewRequest("DELETE", "/api/fermentation/plan/123", nil)
+		rr := httptest.NewRecorder()
+		server.Router().ServeHTTP(rr, req)
+		assert.Equal(t, http.StatusNoContent, rr.Code)
+	})
+
+	t.Run("Plan In Use Conflict", func(t *testing.T) {
+		mockStore := &MockFermentationStore{
+			DeletePlanFunc: func(id int64) error {
+				return fermentation.ErrPlanInUse
+			},
+		}
+		server := NewServer(log, nil, mockStore, nil)
+		req, _ := http.NewRequest("DELETE", "/api/fermentation/plan/123", nil)
+		rr := httptest.NewRecorder()
+		server.Router().ServeHTTP(rr, req)
+		assert.Equal(t, http.StatusConflict, rr.Code)
+	})
+
+	t.Run("Plan Not Found", func(t *testing.T) {
+		mockStore := &MockFermentationStore{
+			DeletePlanFunc: func(id int64) error {
+				return fermentation.ErrPlanNotFound
+			},
+		}
+		server := NewServer(log, nil, mockStore, nil)
+		req, _ := http.NewRequest("DELETE", "/api/fermentation/plan/999", nil)
+		rr := httptest.NewRecorder()
+		server.Router().ServeHTTP(rr, req)
+		assert.Equal(t, http.StatusNotFound, rr.Code)
+	})
+
+	t.Run("Invalid ID Format", func(t *testing.T) {
+		server := NewServer(log, nil, &MockFermentationStore{}, nil)
+		req, _ := http.NewRequest("DELETE", "/api/fermentation/plan/abc", nil)
+		rr := httptest.NewRecorder()
+		server.Router().ServeHTTP(rr, req)
+		assert.Equal(t, http.StatusBadRequest, rr.Code)
+	})
 }

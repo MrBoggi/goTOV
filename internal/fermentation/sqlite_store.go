@@ -180,6 +180,51 @@ WHERE id = :id`,
 	return err
 }
 
+func (s *SQLiteStore) DeletePlan(id int64) error {
+	// 1. Check if plan exists
+	var exists bool
+	err := s.DB.Get(&exists, "SELECT EXISTS(SELECT 1 FROM fermentation_plans WHERE id = ?)", id)
+	if err != nil {
+		return fmt.Errorf("check plan existence: %w", err)
+	}
+	if !exists {
+		return ErrPlanNotFound
+	}
+
+	// 2. Check if plan is in use
+	var inUse bool
+	err = s.DB.Get(&inUse, "SELECT EXISTS(SELECT 1 FROM fermentation_states WHERE plan_id = ? AND status = ?)", id, StatusRunning)
+	if err != nil {
+		return fmt.Errorf("check if plan in use: %w", err)
+	}
+	if inUse {
+		return ErrPlanInUse
+	}
+
+	// 3. Delete plan and steps in transition
+	tx, err := s.DB.Beginx()
+	if err != nil {
+		return fmt.Errorf("begin transaction: %w", err)
+	}
+	defer func() {
+		_ = tx.Rollback()
+	}()
+
+	// Delete steps first
+	_, err = tx.Exec("DELETE FROM fermentation_steps WHERE plan_id = ?", id)
+	if err != nil {
+		return fmt.Errorf("delete steps: %w", err)
+	}
+
+	// Delete plan
+	_, err = tx.Exec("DELETE FROM fermentation_plans WHERE id = ?", id)
+	if err != nil {
+		return fmt.Errorf("delete plan: %w", err)
+	}
+
+	return tx.Commit()
+}
+
 func (s *SQLiteStore) Clear() error {
 	_, err := s.DB.Exec("DELETE FROM fermentation_steps; DELETE FROM fermentation_states; DELETE FROM fermentation_plans;")
 	return err
