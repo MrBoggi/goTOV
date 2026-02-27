@@ -75,8 +75,13 @@ func RunServer(log zerolog.Logger) error {
 		log.Info().Msg("📂 Fermentation store closed")
 	}()
 
+	// --- Fermentation engine ---
+	engine := fermentation.NewEngine(fermentationStore, client, log)
+	engine.Start()
+	defer engine.Stop()
+
 	// --- Start HTTP/WS API server ---
-	apiServer := api.NewServer(log, client, fermentationStore)
+	apiServer := api.NewServer(log, client, fermentationStore, engine)
 	wg.Add(1)
 	go func() {
 		defer wg.Done()

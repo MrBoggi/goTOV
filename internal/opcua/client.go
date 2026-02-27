@@ -161,3 +161,35 @@ func (c *Client) ReadNodeValue(ctx context.Context, nodeID string) (interface{},
 func (c *Client) SetDisplayName(nodeID, name string) {
 	c.displayNames[nodeID] = name
 }
+
+// WriteTag writes a value to a specific node (tag) in the PLC.
+func (c *Client) WriteTag(ctx context.Context, nodeID string, value interface{}) error {
+	id, err := ua.ParseNodeID(nodeID)
+	if err != nil {
+		return fmt.Errorf("invalid node id: %w", err)
+	}
+
+	req := &ua.WriteRequest{
+		NodesToWrite: []*ua.WriteValue{
+			{
+				NodeID:      id,
+				AttributeID: ua.AttributeIDValue,
+				Value: &ua.DataValue{
+					Value: ua.MustVariant(value),
+				},
+			},
+		},
+	}
+
+	resp, err := c.conn.Write(ctx, req)
+	if err != nil {
+		return fmt.Errorf("write failed: %w", err)
+	}
+
+	if resp.Results[0] != ua.StatusOK {
+		return fmt.Errorf("write response status not OK: %v", resp.Results[0])
+	}
+
+	c.log.Info().Str("node", nodeID).Interface("value", value).Msg("✍️ Wrote to PLC tag")
+	return nil
+}
