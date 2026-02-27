@@ -224,6 +224,11 @@ func (e *Engine) setTankHardware(tankID string, cooling bool, heating bool) {
 	valveTag := fmt.Sprintf("ns=4;s=MAIN.fbUA.fermenter%sKjoleventil", tankID)
 	jacketTag := fmt.Sprintf("ns=4;s=MAIN.fbUA.fermenter%sVarmekappe", tankID)
 
+	// Diagnostic: read current type before writing
+	if val, err := e.client.ReadNodeValue(ctx, jacketTag); err == nil {
+		e.log.Debug().Str("tag", jacketTag).Interface("value", val).Msgf("🔎 Tag type diagnostic: %T", val)
+	}
+
 	if err := e.client.WriteTag(ctx, valveTag, cooling); err != nil {
 		e.log.Error().Err(err).Str("tag", valveTag).Msg("❌ Failed to write cooling valve")
 	}
