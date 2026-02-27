@@ -18,7 +18,10 @@ type FermentationStore interface {
 	DeletePlan(id int64) error
 	StartFermentation(planID int64, tankID string, batchID string) (int64, error)
 	ListActiveFermentations() ([]FermentationState, error)
+	GetState(id int64) (FermentationState, error)
+	GetStateByTank(tankID string) (FermentationState, error)
 	UpdateState(state FermentationState) error
+	StopFermentation(id int64) error
 	Clear() error
 	Close() error
 }

@@ -23,7 +23,10 @@ type MockFermentationStore struct {
 	DeletePlanFunc              func(id int64) error
 	StartFermentationFunc       func(planID int64, tankID string, batchID string) (int64, error)
 	ListActiveFermentationsFunc func() ([]fermentation.FermentationState, error)
+	GetStateFunc                func(id int64) (fermentation.FermentationState, error)
+	GetStateByTankFunc          func(tankID string) (fermentation.FermentationState, error)
 	UpdateStateFunc             func(state fermentation.FermentationState) error
+	StopFermentationFunc        func(id int64) error
 }
 
 func (m *MockFermentationStore) SavePlan(plan fermentation.FermentationPlan) (int64, error) {
@@ -72,9 +75,30 @@ func (m *MockFermentationStore) ListActiveFermentations() ([]fermentation.Fermen
 	return nil, nil
 }
 
+func (m *MockFermentationStore) GetState(id int64) (fermentation.FermentationState, error) {
+	if m.GetStateFunc != nil {
+		return m.GetStateFunc(id)
+	}
+	return fermentation.FermentationState{ID: id}, nil
+}
+
+func (m *MockFermentationStore) GetStateByTank(tankID string) (fermentation.FermentationState, error) {
+	if m.GetStateByTankFunc != nil {
+		return m.GetStateByTankFunc(tankID)
+	}
+	return fermentation.FermentationState{TankID: tankID}, nil
+}
+
 func (m *MockFermentationStore) UpdateState(state fermentation.FermentationState) error {
 	if m.UpdateStateFunc != nil {
 		return m.UpdateStateFunc(state)
+	}
+	return nil
+}
+
+func (m *MockFermentationStore) StopFermentation(id int64) error {
+	if m.StopFermentationFunc != nil {
+		return m.StopFermentationFunc(id)
 	}
 	return nil
 }
