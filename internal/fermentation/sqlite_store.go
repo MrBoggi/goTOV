@@ -111,6 +111,10 @@ func (s *SQLiteStore) GetPlan(id int64) (FermentationPlan, error) {
 }
 
 func (s *SQLiteStore) GetSteps(planID int64) ([]FermentationStep, error) {
+	return s.ListSteps(planID)
+}
+
+func (s *SQLiteStore) ListSteps(planID int64) ([]FermentationStep, error) {
 	var steps []FermentationStep
 	err := s.DB.Select(&steps, "SELECT step_number, temperature, duration_hours, description, type FROM fermentation_steps WHERE plan_id = ? ORDER BY step_number ASC", planID)
 	return steps, err
@@ -173,5 +177,10 @@ UPDATE fermentation_states
 SET step_index = :step_index, step_started_at = :step_started_at, target_temp = :target_temp, status = :status
 WHERE id = :id`,
 		state)
+	return err
+}
+
+func (s *SQLiteStore) Clear() error {
+	_, err := s.DB.Exec("DELETE FROM fermentation_steps; DELETE FROM fermentation_states; DELETE FROM fermentation_plans;")
 	return err
 }
