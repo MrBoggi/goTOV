@@ -67,6 +67,7 @@ CREATE TABLE IF NOT EXISTS fermentation_states (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     plan_id INTEGER NOT NULL,
     tank_id TEXT NOT NULL,
+    batch_id TEXT NOT NULL,
     step_index INTEGER NOT NULL,
     started_at TIMESTAMP NOT NULL,
     step_started_at TIMESTAMP NOT NULL,
@@ -87,6 +88,15 @@ CREATE TABLE IF NOT EXISTS fermentation_states (
 		_, err = s.DB.Exec("ALTER TABLE fermentation_states ADD COLUMN tank_id TEXT NOT NULL DEFAULT '1'")
 		if err != nil {
 			return fmt.Errorf("failed to add tank_id column: %w", err)
+		}
+	}
+
+	// Check for batch_id column in fermentation_states (for backward compatibility)
+	err = s.DB.Get(&count, "SELECT count(*) FROM pragma_table_info('fermentation_states') WHERE name='batch_id'")
+	if err == nil && count == 0 {
+		_, err = s.DB.Exec("ALTER TABLE fermentation_states ADD COLUMN batch_id TEXT NOT NULL DEFAULT ''")
+		if err != nil {
+			return fmt.Errorf("failed to add batch_id column: %w", err)
 		}
 	}
 
@@ -150,7 +160,7 @@ func (s *SQLiteStore) ListPlans() ([]FermentationPlan, error) {
 	return plans, nil
 }
 
-func (s *SQLiteStore) StartFermentation(planID int64, tankID string) (int64, error) {
+func (s *SQLiteStore) StartFermentation(planID int64, tankID string, batchID string) (int64, error) {
 	steps, err := s.GetSteps(planID)
 	if err != nil || len(steps) == 0 {
 		return 0, fmt.Errorf("get steps for starting fermentation: %w", err)
@@ -160,6 +170,7 @@ func (s *SQLiteStore) StartFermentation(planID int64, tankID string) (int64, err
 	state := FermentationState{
 		PlanID:        planID,
 		TankID:        tankID,
+		BatchID:       batchID,
 		StepIndex:     0,
 		StartedAt:     now,
 		StepStartedAt: now,
@@ -168,8 +179,8 @@ func (s *SQLiteStore) StartFermentation(planID int64, tankID string) (int64, err
 	}
 
 	res, err := s.DB.NamedExec(`
-INSERT INTO fermentation_states (plan_id, tank_id, step_index, started_at, step_started_at, target_temp, status)
-VALUES (:plan_id, :tank_id, :step_index, :started_at, :step_started_at, :target_temp, :status)`,
+INSERT INTO fermentation_states (plan_id, tank_id, batch_id, step_index, started_at, step_started_at, target_temp, status)
+VALUES (:plan_id, :tank_id, :batch_id, :step_index, :started_at, :step_started_at, :target_temp, :status)`,
 		state)
 	if err != nil {
 		return 0, fmt.Errorf("insert fermentation state: %w", err)

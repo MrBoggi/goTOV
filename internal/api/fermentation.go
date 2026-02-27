@@ -11,8 +11,9 @@ import (
 )
 
 type StartFermentationRequest struct {
-	PlanID int64  `json:"planID"`
-	TankID string `json:"tankID"`
+	PlanID  int64  `json:"planID"`
+	TankID  string `json:"tankID"`
+	BatchID string `json:"batchID"`
 }
 
 func (s *Server) handleSaveFermentationPlan(w http.ResponseWriter, r *http.Request) {
@@ -59,7 +60,7 @@ func (s *Server) handleStartFermentation(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	fermentationID, err := s.fermentationStore.StartFermentation(req.PlanID, req.TankID)
+	fermentationID, err := s.fermentationStore.StartFermentation(req.PlanID, req.TankID, req.BatchID)
 	if err != nil {
 		s.log.Error().Err(err).Msg("failed to start fermentation in store")
 		http.Error(w, "failed to start fermentation", http.StatusInternalServerError)
