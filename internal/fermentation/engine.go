@@ -113,7 +113,7 @@ func (e *Engine) processAll() {
 	if e.client != nil {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
-		err := e.client.WriteTag(ctx, "MAIN.fbUA.glykolkjolerPumpe", anyCooling)
+		err := e.client.WriteTag(ctx, "ns=4;s=MAIN.fbUA.glykolkjolerPumpe", anyCooling)
 		if err != nil {
 			e.log.Error().Err(err).Msg("failed to sync glycol pump")
 		}
@@ -172,7 +172,7 @@ func (e *Engine) processOne(state *FermentationState) (bool, error) {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 
-		tempTag := fmt.Sprintf("MAIN.fbUA.fermenter%sTemp", state.TankID)
+		tempTag := fmt.Sprintf("ns=4;s=MAIN.fbUA.fermenter%sTemp", state.TankID)
 		val, err := e.client.ReadNodeValue(ctx, tempTag)
 		if err != nil {
 			return false, fmt.Errorf("failed to read current temp: %w", err)
@@ -213,8 +213,8 @@ func (e *Engine) setTankHardware(tankID string, cooling bool, heating bool) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	valveTag := fmt.Sprintf("MAIN.fbUA.fermenter%sKjoleventil", tankID)
-	jacketTag := fmt.Sprintf("MAIN.fbUA.fermenter%sVarmekappe", tankID)
+	valveTag := fmt.Sprintf("ns=4;s=MAIN.fbUA.fermenter%sKjoleventil", tankID)
+	jacketTag := fmt.Sprintf("ns=4;s=MAIN.fbUA.fermenter%sVarmekappe", tankID)
 
 	_ = e.client.WriteTag(ctx, valveTag, cooling)
 	_ = e.client.WriteTag(ctx, jacketTag, heating)
