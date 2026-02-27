@@ -97,18 +97,34 @@ func (e *Engine) processAll() {
 	}
 	e.mu.RUnlock()
 
+	anyCooling := false
 	for _, state := range toProcess {
-		if err := e.processOne(state); err != nil {
+		coolingActive, err := e.processOne(state)
+		if err != nil {
 			e.log.Error().Err(err).Int64("id", state.ID).Msg("❌ Error processing fermentation")
+			continue
+		}
+		if coolingActive {
+			anyCooling = true
+		}
+	}
+
+	// 5. Glycol Pump Interlock: Only run if at least one valve is open
+	if e.client != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		err := e.client.WriteTag(ctx, "MAIN.fbUA.glykolkjolerPumpe", anyCooling)
+		if err != nil {
+			e.log.Error().Err(err).Msg("failed to sync glycol pump")
 		}
 	}
 }
 
-func (e *Engine) processOne(state *FermentationState) error {
+func (e *Engine) processOne(state *FermentationState) (bool, error) {
 	// 1. Get current plan and steps
 	steps, err := e.store.GetSteps(state.PlanID)
 	if err != nil {
-		return err
+		return false, err
 	}
 
 	if state.StepIndex >= len(steps) {
@@ -118,7 +134,10 @@ func (e *Engine) processOne(state *FermentationState) error {
 		e.mu.Lock()
 		delete(e.active, state.ID)
 		e.mu.Unlock()
-		return nil
+
+		// Ensure we turn off everything for this tank
+		e.setTankHardware(state.TankID, false, false)
+		return false, nil
 	}
 
 	currentStep := steps[state.StepIndex]
@@ -147,23 +166,56 @@ func (e *Engine) processOne(state *FermentationState) error {
 		}
 	}
 
-	// 3. Dynamic Tag Mapping
-	// Tank 1 -> fermenter1, Tank 2 -> fermenter2
-	baseTag := "MAIN.fbUA.fermenter1Temp"
-	if state.TankID == "2" {
-		baseTag = "MAIN.fbUA.fermenter2Temp"
-	}
-
-	// 4. Write to PLC
+	// 3. Thermostat Logic
+	coolingActive := false
 	if e.client != nil {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 
-		err := e.client.WriteTag(ctx, baseTag, state.TargetTemp)
+		tempTag := fmt.Sprintf("MAIN.fbUA.fermenter%sTemp", state.TankID)
+		val, err := e.client.ReadNodeValue(ctx, tempTag)
 		if err != nil {
-			return fmt.Errorf("failed to write target temp to PLC: %w", err)
+			return false, fmt.Errorf("failed to read current temp: %w", err)
 		}
+
+		currentTemp, ok := val.(float32)
+		if !ok {
+			// Try float64
+			if v64, ok := val.(float64); ok {
+				currentTemp = float32(v64)
+			} else {
+				return false, fmt.Errorf("current temp is not a float: %T", val)
+			}
+		}
+
+		heating := false
+		cooling := false
+		hysteresis := float32(0.2)
+		target := float32(state.TargetTemp)
+
+		if currentTemp > target+hysteresis {
+			cooling = true
+		} else if currentTemp < target-hysteresis {
+			heating = true
+		}
+
+		e.setTankHardware(state.TankID, cooling, heating)
+		coolingActive = cooling
 	}
 
-	return nil
+	return coolingActive, nil
+}
+
+func (e *Engine) setTankHardware(tankID string, cooling bool, heating bool) {
+	if e.client == nil {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	valveTag := fmt.Sprintf("MAIN.fbUA.fermenter%sKjoleventil", tankID)
+	jacketTag := fmt.Sprintf("MAIN.fbUA.fermenter%sVarmekappe", tankID)
+
+	_ = e.client.WriteTag(ctx, valveTag, cooling)
+	_ = e.client.WriteTag(ctx, jacketTag, heating)
 }
