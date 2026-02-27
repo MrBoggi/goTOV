@@ -76,7 +76,21 @@ CREATE TABLE IF NOT EXISTS fermentation_states (
 );
 `
 	_, err := s.DB.Exec(schema)
-	return err
+	if err != nil {
+		return fmt.Errorf("failed to run schema migration: %w", err)
+	}
+
+	// Check for tank_id column in fermentation_states (for backward compatibility)
+	var count int
+	err = s.DB.Get(&count, "SELECT count(*) FROM pragma_table_info('fermentation_states') WHERE name='tank_id'")
+	if err == nil && count == 0 {
+		_, err = s.DB.Exec("ALTER TABLE fermentation_states ADD COLUMN tank_id TEXT NOT NULL DEFAULT '1'")
+		if err != nil {
+			return fmt.Errorf("failed to add tank_id column: %w", err)
+		}
+	}
+
+	return nil
 }
 
 func (s *SQLiteStore) SavePlan(plan FermentationPlan) (int64, error) {
