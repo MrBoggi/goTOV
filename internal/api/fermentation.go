@@ -134,6 +134,22 @@ func (s *Server) handleDeleteFermentationPlan(w http.ResponseWriter, r *http.Req
 		return
 	}
 
+	// If force=true, stop all active fermentations using this plan first
+	if r.URL.Query().Get("force") == "true" && s.engine != nil {
+		active, listErr := s.fermentationStore.ListActiveFermentations()
+		if listErr == nil {
+			for _, a := range active {
+				if a.PlanID == id {
+					if stopErr := s.engine.StopFermentation(a.ID); stopErr != nil {
+						s.log.Error().Err(stopErr).Int64("fermentationID", a.ID).Msg("failed to stop fermentation before plan deletion")
+					} else {
+						s.log.Info().Int64("fermentationID", a.ID).Str("tank", a.TankID).Msg("stopped fermentation before plan deletion")
+					}
+				}
+			}
+		}
+	}
+
 	err = s.fermentationStore.DeletePlan(id)
 	if err != nil {
 		if errors.Is(err, fermentation.ErrPlanNotFound) {
@@ -203,7 +219,7 @@ func (s *Server) handleGetApiDocs(w http.ResponseWriter, r *http.Request) {
 			{"method": "POST", "path": "/api/fermentation/stop", "description": "Stop an active fermentation (requires tankID or id)"},
 			{"method": "GET", "path": "/api/fermentation/status", "description": "Get status of all active fermentations"},
 			{"method": "GET", "path": "/api/fermentation/docs", "description": "This documentation"},
-			{"method": "DELETE", "path": "/api/fermentation/plan/{id}", "description": "Delete a fermentation plan (if not in use)"},
+			{"method": "DELETE", "path": "/api/fermentation/plan/{id}", "description": "Delete a fermentation plan. Use ?force=true to stop active fermentations first"},
 			{"method": "GET", "path": "/api/tanks", "description": "List available tanks"},
 		},
 	}
