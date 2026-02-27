@@ -2,9 +2,12 @@ package api
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
+	"strconv"
 
 	"github.com/MrBoggi/goTOV/internal/fermentation"
+	"github.com/go-chi/chi/v5"
 )
 
 type StartFermentationRequest struct {
@@ -84,6 +87,32 @@ func (s *Server) handleStartFermentation(w http.ResponseWriter, r *http.Request)
 	})
 }
 
+func (s *Server) handleDeleteFermentationPlan(w http.ResponseWriter, r *http.Request) {
+	idStr := chi.URLParam(r, "id")
+	id, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil {
+		http.Error(w, "invalid ID format", http.StatusBadRequest)
+		return
+	}
+
+	err = s.fermentationStore.DeletePlan(id)
+	if err != nil {
+		if errors.Is(err, fermentation.ErrPlanNotFound) {
+			http.Error(w, "plan not found", http.StatusNotFound)
+			return
+		}
+		if errors.Is(err, fermentation.ErrPlanInUse) {
+			http.Error(w, "cannot delete plan while in use by an active fermentation", http.StatusConflict)
+			return
+		}
+		s.log.Error().Err(err).Int64("id", id).Msg("failed to delete fermentation plan")
+		http.Error(w, "internal server error", http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
+}
+
 func (s *Server) handleGetFermentationStatus(w http.ResponseWriter, r *http.Request) {
 	active, err := s.fermentationStore.ListActiveFermentations()
 	if err != nil {
@@ -106,6 +135,7 @@ func (s *Server) handleGetApiDocs(w http.ResponseWriter, r *http.Request) {
 			{"method": "POST", "path": "/api/fermentation/start", "description": "Start a fermentation process (requires planID, tankID)"},
 			{"method": "GET", "path": "/api/fermentation/status", "description": "Get status of all active fermentations"},
 			{"method": "GET", "path": "/api/fermentation/docs", "description": "This documentation"},
+			{"method": "DELETE", "path": "/api/fermentation/plan/{id}", "description": "Delete a fermentation plan (if not in use)"},
 			{"method": "GET", "path": "/api/tanks", "description": "List available tanks"},
 		},
 	}

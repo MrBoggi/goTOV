@@ -67,7 +67,7 @@ func (s *Server) Router() http.Handler {
 
 	r.Use(cors.Handler(cors.Options{
 		AllowedOrigins:   []string{"*"},
-		AllowedMethods:   []string{"GET", "POST", "OPTIONS"},
+		AllowedMethods:   []string{"GET", "POST", "DELETE", "OPTIONS"},
 		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-CSRF-Token"},
 		AllowCredentials: false,
 		MaxAge:           300,
@@ -102,6 +102,7 @@ func (s *Server) Router() http.Handler {
 	r.Post("/api/fermentation/start", s.handleStartFermentation)
 	r.Get("/api/fermentation/status", s.handleGetFermentationStatus)
 	r.Get("/api/fermentation/docs", s.handleGetApiDocs)
+	r.Delete("/api/fermentation/plan/{id}", s.handleDeleteFermentationPlan)
 	r.Get("/api/tanks", s.handleListTanks)
 
 	// ----------------------------------------------------
