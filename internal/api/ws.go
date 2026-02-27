@@ -19,6 +19,7 @@ type Server struct {
 	log               zerolog.Logger
 	client            *opcua.Client
 	fermentationStore fermentation.FermentationStore
+	engine            *fermentation.Engine
 
 	// Connected websocket clients
 	mu          sync.RWMutex
@@ -40,11 +41,12 @@ type WSMessage struct {
 }
 
 // NewServer initializes the WS/HTTP server and listens for OPC UA updates
-func NewServer(log zerolog.Logger, client *opcua.Client, fermentationStore fermentation.FermentationStore) *Server {
+func NewServer(log zerolog.Logger, client *opcua.Client, fermentationStore fermentation.FermentationStore, engine *fermentation.Engine) *Server {
 	s := &Server{
 		log:               log,
 		client:            client,
 		fermentationStore: fermentationStore,
+		engine:            engine,
 		subscribers:       make(map[*websocket.Conn]bool),
 		latest:            make(map[string]WSMessage),
 		upgrader: websocket.Upgrader{
@@ -98,6 +100,8 @@ func (s *Server) Router() http.Handler {
 	r.Get("/api/fermentation/plan", s.handleListFermentationPlans) // Alias for plural
 	r.Get("/api/fermentation/plans", s.handleListFermentationPlans)
 	r.Post("/api/fermentation/start", s.handleStartFermentation)
+	r.Get("/api/fermentation/status", s.handleGetFermentationStatus)
+	r.Get("/api/fermentation/docs", s.handleGetApiDocs)
 	r.Get("/api/tanks", s.handleListTanks)
 
 	// ----------------------------------------------------

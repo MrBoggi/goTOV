@@ -1,5 +1,7 @@
 package fermentation
 
+import "time"
+
 // Et enkelt steg i en plan vi LAGRER i SQLite.
 type FermentationStep struct {
 	StepNumber    int     `db:"step_number" json:"step_number"`
@@ -18,15 +20,21 @@ type FermentationPlan struct {
 	Steps      []FermentationStep `db:"-"` // hentes separat
 }
 
+const (
+	StatusRunning   = "RUNNING"
+	StatusCompleted = "COMPLETED"
+	StatusPaused    = "PAUSED"
+	StatusError     = "ERROR"
+)
+
 // Til bruk av prosessmotoren (kommer senere)
 type FermentationState struct {
-	ID            int64   `db:"id"`
-	PlanID        int64   `db:"plan_id"`
-	BatchID       string  `db:"batch_id"`
-	TankNo        int     `db:"tank_no"`
-	StepIndex     int     `db:"step_index"`
-	StartedAt     string  `db:"started_at"`
-	StepStartedAt string  `db:"step_started_at"`
-	TargetTemp    float64 `db:"target_temp"`
-	Status        string  `db:"status"`
+	ID            int64     `db:"id" json:"id"`
+	PlanID        int64     `db:"plan_id" json:"planID"`
+	TankID        string    `db:"tank_id" json:"tankID"`
+	StepIndex     int       `db:"step_index" json:"stepIndex"`
+	StartedAt     time.Time `db:"started_at" json:"startedAt"`
+	StepStartedAt time.Time `db:"step_started_at" json:"stepStartedAt"`
+	TargetTemp    float64   `db:"target_temp" json:"targetTemp"`
+	Status        string    `db:"status" json:"status"`
 }

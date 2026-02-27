@@ -58,9 +58,22 @@ func (s *Server) handleStartFermentation(w http.ResponseWriter, r *http.Request)
 
 	fermentationID, err := s.fermentationStore.StartFermentation(req.PlanID, req.TankID)
 	if err != nil {
-		s.log.Error().Err(err).Msg("failed to start fermentation")
+		s.log.Error().Err(err).Msg("failed to start fermentation in store")
 		http.Error(w, "failed to start fermentation", http.StatusInternalServerError)
 		return
+	}
+
+	// Load the state we just created
+	if s.engine != nil {
+		active, err := s.fermentationStore.ListActiveFermentations()
+		if err == nil {
+			for _, state := range active {
+				if state.ID == fermentationID {
+					s.engine.AddFermentation(&state)
+					break
+				}
+			}
+		}
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -71,8 +84,43 @@ func (s *Server) handleStartFermentation(w http.ResponseWriter, r *http.Request)
 	})
 }
 
+func (s *Server) handleGetFermentationStatus(w http.ResponseWriter, r *http.Request) {
+	active, err := s.fermentationStore.ListActiveFermentations()
+	if err != nil {
+		s.log.Error().Err(err).Msg("failed to list active fermentations")
+		http.Error(w, "failed to list active fermentations", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	_ = json.NewEncoder(w).Encode(active)
+}
+
+func (s *Server) handleGetApiDocs(w http.ResponseWriter, r *http.Request) {
+	docs := map[string]interface{}{
+		"title": "goTOV Fermentation API",
+		"endpoints": []map[string]string{
+			{"method": "GET", "path": "/api/fermentation/plans", "description": "List all fermentation plans"},
+			{"method": "POST", "path": "/api/fermentation/plan", "description": "Save a new fermentation plan"},
+			{"method": "POST", "path": "/api/fermentation/start", "description": "Start a fermentation process (requires planID, tankID)"},
+			{"method": "GET", "path": "/api/fermentation/status", "description": "Get status of all active fermentations"},
+			{"method": "GET", "path": "/api/fermentation/docs", "description": "This documentation"},
+			{"method": "GET", "path": "/api/tanks", "description": "List available tanks"},
+		},
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	_ = json.NewEncoder(w).Encode(docs)
+}
+
 func (s *Server) handleListTanks(w http.ResponseWriter, r *http.Request) {
-	tanks := []string{"TANK_ALPHA_001", "TANK_BETA_002", "TANK_GAMMA_003"} // Hardcoded list of tank IDs
+	// Dynamically list tanks 1 and 2
+	tanks := []map[string]string{
+		{"id": "1", "name": "Tank 1 (Fermenter 1)"},
+		{"id": "2", "name": "Tank 2 (Fermenter 2)"},
+	}
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)

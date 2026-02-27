@@ -66,11 +66,10 @@ CREATE TABLE IF NOT EXISTS fermentation_steps (
 CREATE TABLE IF NOT EXISTS fermentation_states (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     plan_id INTEGER NOT NULL,
-	batch_id TEXT NOT NULL,
-    tank_no INTEGER NOT NULL,
+    tank_id TEXT NOT NULL,
     step_index INTEGER NOT NULL,
-    started_at TEXT NOT NULL,
-    step_started_at TEXT NOT NULL,
+    started_at TIMESTAMP NOT NULL,
+    step_started_at TIMESTAMP NOT NULL,
     target_temp REAL NOT NULL,
     status TEXT NOT NULL,
     FOREIGN KEY(plan_id) REFERENCES fermentation_plans(id)
@@ -105,45 +104,83 @@ VALUES (?, ?, ?, ?, ?, ?)`,
 	return planID, nil
 }
 
-func (s *SQLiteStore) StartFermentation(planID int64, tankID string) (int64, error) {
+func (s *SQLiteStore) GetPlan(id int64) (FermentationPlan, error) {
 	var plan FermentationPlan
-	err := s.DB.Get(&plan, "SELECT id, name, recipe_id, total_steps FROM fermentation_plans WHERE id = ?", planID)
-	if err != nil {
-		return 0, fmt.Errorf("get plan for starting fermentation: %w", err)
-	}
+	err := s.DB.Get(&plan, "SELECT * FROM fermentation_plans WHERE id = ?", id)
+	return plan, err
+}
 
+func (s *SQLiteStore) GetSteps(planID int64) ([]FermentationStep, error) {
+	return s.ListSteps(planID)
+}
+
+func (s *SQLiteStore) ListSteps(planID int64) ([]FermentationStep, error) {
 	var steps []FermentationStep
-	err = s.DB.Select(&steps, "SELECT step_number, temperature, duration_hours, description, type FROM fermentation_steps WHERE plan_id = ? ORDER BY step_number ASC", planID)
-	if err != nil {
-		return 0, fmt.Errorf("get steps for starting fermentation: %w", err)
-	}
-	plan.Steps = steps
+	err := s.DB.Select(&steps, "SELECT step_number, temperature, duration_hours, description, type FROM fermentation_steps WHERE plan_id = ? ORDER BY step_number ASC", planID)
+	return steps, err
+}
 
-	if len(plan.Steps) == 0 {
-		return 0, fmt.Errorf("fermentation plan %d has no steps", planID)
+func (s *SQLiteStore) ListPlans() ([]FermentationPlan, error) {
+	var plans []FermentationPlan
+	err := s.DB.Select(&plans, "SELECT * FROM fermentation_plans")
+	if err != nil {
+		return nil, err
+	}
+	// Fetch steps for each plan
+	for i := range plans {
+		steps, err := s.GetSteps(plans[i].ID)
+		if err == nil {
+			plans[i].Steps = steps
+		}
+	}
+	return plans, nil
+}
+
+func (s *SQLiteStore) StartFermentation(planID int64, tankID string) (int64, error) {
+	steps, err := s.GetSteps(planID)
+	if err != nil || len(steps) == 0 {
+		return 0, fmt.Errorf("get steps for starting fermentation: %w", err)
 	}
 
 	now := time.Now().UTC()
-	initialState := FermentationState{
+	state := FermentationState{
 		PlanID:        planID,
-		BatchID:       fmt.Sprintf("BATCH-%s-%d", tankID, planID), // Placeholder for BatchID
-		TankNo:        1,                                          // Placeholder for TankNo, needs proper parsing from tankID
+		TankID:        tankID,
 		StepIndex:     0,
-		StartedAt:     now.Format(time.RFC3339),
-		StepStartedAt: now.Format(time.RFC3339),
-		TargetTemp:    plan.Steps[0].Temperature,
-		Status:        "RUNNING",
+		StartedAt:     now,
+		StepStartedAt: now,
+		TargetTemp:    steps[0].Temperature,
+		Status:        StatusRunning,
 	}
 
-	res, err := s.DB.Exec(`
-INSERT INTO fermentation_states (plan_id, batch_id, tank_no, step_index, started_at, step_started_at, target_temp, status)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-		initialState.PlanID, initialState.BatchID, initialState.TankNo, initialState.StepIndex,
-		initialState.StartedAt, initialState.StepStartedAt, initialState.TargetTemp, initialState.Status)
+	res, err := s.DB.NamedExec(`
+INSERT INTO fermentation_states (plan_id, tank_id, step_index, started_at, step_started_at, target_temp, status)
+VALUES (:plan_id, :tank_id, :step_index, :started_at, :step_started_at, :target_temp, :status)`,
+		state)
 	if err != nil {
 		return 0, fmt.Errorf("insert fermentation state: %w", err)
 	}
 
-	fermentationID, _ := res.LastInsertId()
-	return fermentationID, nil
+	id, _ := res.LastInsertId()
+	return id, nil
+}
+
+func (s *SQLiteStore) ListActiveFermentations() ([]FermentationState, error) {
+	var active []FermentationState
+	err := s.DB.Select(&active, "SELECT * FROM fermentation_states WHERE status = ?", StatusRunning)
+	return active, err
+}
+
+func (s *SQLiteStore) UpdateState(state FermentationState) error {
+	_, err := s.DB.NamedExec(`
+UPDATE fermentation_states 
+SET step_index = :step_index, step_started_at = :step_started_at, target_temp = :target_temp, status = :status
+WHERE id = :id`,
+		state)
+	return err
+}
+
+func (s *SQLiteStore) Clear() error {
+	_, err := s.DB.Exec("DELETE FROM fermentation_steps; DELETE FROM fermentation_states; DELETE FROM fermentation_plans;")
+	return err
 }
