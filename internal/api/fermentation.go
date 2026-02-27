@@ -156,6 +156,18 @@ func (s *Server) handleGetFermentationStatus(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
+	// Enrich with Plan details for the UI
+	for i := range active {
+		plan, err := s.fermentationStore.GetPlan(active[i].PlanID)
+		if err == nil {
+			active[i].PlanName = plan.Name
+		}
+		steps, err := s.fermentationStore.GetSteps(active[i].PlanID)
+		if err == nil && active[i].StepIndex < len(steps) {
+			active[i].StepDuration = steps[active[i].StepIndex].DurationHours
+		}
+	}
+
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	_ = json.NewEncoder(w).Encode(active)

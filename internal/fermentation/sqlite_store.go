@@ -75,6 +75,19 @@ CREATE TABLE IF NOT EXISTS fermentation_states (
     status TEXT NOT NULL,
     FOREIGN KEY(plan_id) REFERENCES fermentation_plans(id)
 );
+
+CREATE TABLE IF NOT EXISTS fermentation_history (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    plan_id INTEGER NOT NULL,
+    tank_id TEXT NOT NULL,
+    batch_id TEXT NOT NULL,
+    timestamp TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    temperature REAL NOT NULL,
+    target_temp REAL NOT NULL,
+    cooling_valve BOOLEAN NOT NULL,
+    heating_jacket BOOLEAN NOT NULL,
+    FOREIGN KEY(plan_id) REFERENCES fermentation_plans(id)
+);
 `
 	_, err := s.DB.Exec(schema)
 	if err != nil {
@@ -228,6 +241,15 @@ UPDATE fermentation_states
 SET step_index = :step_index, step_started_at = :step_started_at, target_temp = :target_temp, status = :status
 WHERE id = :id`,
 		state)
+	return err
+}
+
+func (s *SQLiteStore) LogData(planID int64, tankID string, batchID string, temp float32, target float32, valve bool, jacket bool) error {
+	_, err := s.DB.Exec(`
+INSERT INTO fermentation_history 
+(plan_id, tank_id, batch_id, temperature, target_temp, cooling_valve, heating_jacket)
+VALUES (?, ?, ?, ?, ?, ?, ?)`,
+		planID, tankID, batchID, temp, target, valve, jacket)
 	return err
 }
 

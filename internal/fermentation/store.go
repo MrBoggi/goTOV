@@ -22,6 +22,7 @@ type FermentationStore interface {
 	GetStateByTank(tankID string) (FermentationState, error)
 	UpdateState(state FermentationState) error
 	StopFermentation(id int64) error
+	LogData(planID int64, tankID string, batchID string, temp float32, target float32, valve bool, jacket bool) error
 	Clear() error
 	Close() error
 }
