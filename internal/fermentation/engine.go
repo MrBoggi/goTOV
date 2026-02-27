@@ -115,7 +115,7 @@ func (e *Engine) StopByTank(tankID string) error {
 		// Try to find it in the store instead
 		state, err := e.store.GetStateByTank(tankID)
 		if err != nil {
-			return fmt.Errorf("no active fermentation found for tank %s", tankID)
+			return ErrFermentationNotFound
 		}
 		stateID = state.ID
 	}

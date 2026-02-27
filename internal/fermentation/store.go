@@ -5,8 +5,9 @@ import (
 )
 
 var (
-	ErrPlanInUse    = errors.New("cannot delete plan while in use by an active fermentation")
-	ErrPlanNotFound = errors.New("fermentation plan not found")
+	ErrPlanInUse            = errors.New("cannot delete plan while in use by an active fermentation")
+	ErrPlanNotFound         = errors.New("fermentation plan not found")
+	ErrFermentationNotFound = errors.New("active fermentation not found")
 )
 
 type FermentationStore interface {

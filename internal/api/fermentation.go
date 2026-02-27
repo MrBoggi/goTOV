@@ -112,6 +112,10 @@ func (s *Server) handleStopFermentation(w http.ResponseWriter, r *http.Request) 
 	}
 
 	if err != nil {
+		if errors.Is(err, fermentation.ErrFermentationNotFound) {
+			http.Error(w, "no active fermentation found", http.StatusNotFound)
+			return
+		}
 		s.log.Error().Err(err).Msg("failed to stop fermentation")
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -137,7 +141,23 @@ func (s *Server) handleDeleteFermentationPlan(w http.ResponseWriter, r *http.Req
 			return
 		}
 		if errors.Is(err, fermentation.ErrPlanInUse) {
-			http.Error(w, "cannot delete plan while in use by an active fermentation", http.StatusConflict)
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusConflict)
+
+			active, listErr := s.fermentationStore.ListActiveFermentations()
+			var tanks []string
+			if listErr == nil {
+				for _, a := range active {
+					if a.PlanID == id {
+						tanks = append(tanks, a.TankID)
+					}
+				}
+			}
+
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{
+				"error":        "Plan is currently in use by active fermentations",
+				"active_tanks": tanks,
+			})
 			return
 		}
 		s.log.Error().Err(err).Int64("id", id).Msg("failed to delete fermentation plan")
