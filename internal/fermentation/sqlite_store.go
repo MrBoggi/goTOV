@@ -231,8 +231,18 @@ func (s *SQLiteStore) GetStateByTank(tankID string) (FermentationState, error) {
 }
 
 func (s *SQLiteStore) StopFermentation(id int64) error {
-	_, err := s.DB.Exec("UPDATE fermentation_states SET status = ? WHERE id = ?", StatusStopped, id)
-	return err
+	res, err := s.DB.Exec("UPDATE fermentation_states SET status = ? WHERE id = ?", StatusStopped, id)
+	if err != nil {
+		return err
+	}
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return ErrFermentationNotFound
+	}
+	return nil
 }
 
 func (s *SQLiteStore) UpdateState(state FermentationState) error {
