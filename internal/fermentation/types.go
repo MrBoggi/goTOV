@@ -32,6 +32,7 @@ type FermentationState struct {
 	ID            int64     `db:"id" json:"id"`
 	PlanID        int64     `db:"plan_id" json:"planID"`
 	TankID        string    `db:"tank_id" json:"tankID"`
+	BatchID       string    `db:"batch_id" json:"batchID"`
 	StepIndex     int       `db:"step_index" json:"stepIndex"`
 	StartedAt     time.Time `db:"started_at" json:"startedAt"`
 	StepStartedAt time.Time `db:"step_started_at" json:"stepStartedAt"`

@@ -18,12 +18,12 @@ type MockFermentationStore struct {
 	GetPlanFunc                 func(id int64) (fermentation.FermentationPlan, error)
 	GetStepsFunc                func(planID int64) ([]fermentation.FermentationStep, error)
 	ListPlansFunc               func() ([]fermentation.FermentationPlan, error)
-	StartFermentationFunc       func(planID int64, tankID string) (int64, error)
-	ListActiveFermentationsFunc func() ([]fermentation.FermentationState, error)
-	UpdateStateFunc             func(state fermentation.FermentationState) error
 	ListStepsFunc               func(planID int64) ([]fermentation.FermentationStep, error)
 	ClearFunc                   func() error
 	DeletePlanFunc              func(id int64) error
+	StartFermentationFunc       func(planID int64, tankID string, batchID string) (int64, error)
+	ListActiveFermentationsFunc func() ([]fermentation.FermentationState, error)
+	UpdateStateFunc             func(state fermentation.FermentationState) error
 }
 
 func (m *MockFermentationStore) SavePlan(plan fermentation.FermentationPlan) (int64, error) {
@@ -58,9 +58,9 @@ func (m *MockFermentationStore) ListPlans() ([]fermentation.FermentationPlan, er
 	return nil, nil
 }
 
-func (m *MockFermentationStore) StartFermentation(planID int64, tankID string) (int64, error) {
+func (m *MockFermentationStore) StartFermentation(planID int64, tankID string, batchID string) (int64, error) {
 	if m.StartFermentationFunc != nil {
-		return m.StartFermentationFunc(planID, tankID)
+		return m.StartFermentationFunc(planID, tankID, batchID)
 	}
 	return 1, nil
 }
@@ -191,7 +191,7 @@ func TestListFermentationPlansEndpoint(t *testing.T) {
 func TestStartFermentationEndpoint(t *testing.T) {
 	log := logger.New()
 	mockStore := &MockFermentationStore{
-		StartFermentationFunc: func(planID int64, tankID string) (int64, error) {
+		StartFermentationFunc: func(planID int64, tankID string, batchID string) (int64, error) {
 			return 789, nil
 		},
 		ListActiveFermentationsFunc: func() ([]fermentation.FermentationState, error) {
