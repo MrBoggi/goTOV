@@ -6,7 +6,7 @@ import (
 
 // Henter alle planer
 func (s *SQLiteStore) ListPlans() ([]FermentationPlan, error) {
-	var plans []FermentationPlan
+	plans := make([]FermentationPlan, 0)
 	err := s.DB.Select(&plans, `
 		SELECT id, name, recipe_id, total_steps
 		FROM fermentation_plans
