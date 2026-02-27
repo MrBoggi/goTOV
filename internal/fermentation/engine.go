@@ -199,6 +199,14 @@ func (e *Engine) processOne(state *FermentationState) (bool, error) {
 			heating = true
 		}
 
+		e.log.Debug().
+			Str("tank", state.TankID).
+			Float32("current", currentTemp).
+			Float32("target", target).
+			Bool("cooling", cooling).
+			Bool("heating", heating).
+			Msg("🌡️ Thermostat decision")
+
 		e.setTankHardware(state.TankID, cooling, heating)
 		coolingActive = cooling
 	}
@@ -216,6 +224,10 @@ func (e *Engine) setTankHardware(tankID string, cooling bool, heating bool) {
 	valveTag := fmt.Sprintf("ns=4;s=MAIN.fbUA.fermenter%sKjoleventil", tankID)
 	jacketTag := fmt.Sprintf("ns=4;s=MAIN.fbUA.fermenter%sVarmekappe", tankID)
 
-	_ = e.client.WriteTag(ctx, valveTag, cooling)
-	_ = e.client.WriteTag(ctx, jacketTag, heating)
+	if err := e.client.WriteTag(ctx, valveTag, cooling); err != nil {
+		e.log.Error().Err(err).Str("tag", valveTag).Msg("❌ Failed to write cooling valve")
+	}
+	if err := e.client.WriteTag(ctx, jacketTag, heating); err != nil {
+		e.log.Error().Err(err).Str("tag", jacketTag).Msg("❌ Failed to write heating jacket")
+	}
 }
