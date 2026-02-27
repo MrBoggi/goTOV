@@ -100,6 +100,15 @@ CREATE TABLE IF NOT EXISTS fermentation_states (
 		}
 	}
 
+	// Check for legacy tank_no column in fermentation_states (can cause NOT NULL constraint failures)
+	err = s.DB.Get(&count, "SELECT count(*) FROM pragma_table_info('fermentation_states') WHERE name='tank_no'")
+	if err == nil && count > 0 {
+		_, err = s.DB.Exec("ALTER TABLE fermentation_states DROP COLUMN tank_no")
+		if err != nil {
+			return fmt.Errorf("failed to drop legacy tank_no column: %w", err)
+		}
+	}
+
 	return nil
 }
 
