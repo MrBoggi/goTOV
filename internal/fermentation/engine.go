@@ -74,6 +74,55 @@ func (e *Engine) AddFermentation(state *FermentationState) {
 	e.log.Info().Int64("id", state.ID).Msg("➕ Added fermentation to engine")
 }
 
+func (e *Engine) StopFermentation(id int64) error {
+	e.mu.Lock()
+	state, ok := e.active[id]
+	if ok {
+		delete(e.active, id)
+	}
+	e.mu.Unlock()
+
+	if !ok {
+		// Even if not in active map (e.g. engine restarted and it wasn't running),
+		// we should still try to stop it in the store just in case.
+		e.log.Warn().Int64("id", id).Msg("⚠️ Fermentation not found in active engine map, stopping in store only")
+	}
+
+	if err := e.store.StopFermentation(id); err != nil {
+		return err
+	}
+
+	if ok {
+		e.log.Info().Int64("id", id).Str("tank", state.TankID).Msg("🛑 Stopped fermentation in engine and store")
+	}
+	return nil
+}
+
+func (e *Engine) StopByTank(tankID string) error {
+	e.mu.Lock()
+	var stateID int64
+	found := false
+	for id, state := range e.active {
+		if state.TankID == tankID {
+			stateID = id
+			found = true
+			break
+		}
+	}
+	e.mu.Unlock()
+
+	if !found {
+		// Try to find it in the store instead
+		state, err := e.store.GetStateByTank(tankID)
+		if err != nil {
+			return fmt.Errorf("no active fermentation found for tank %s", tankID)
+		}
+		stateID = state.ID
+	}
+
+	return e.StopFermentation(stateID)
+}
+
 func (e *Engine) run() {
 	defer e.wg.Done()
 	ticker := time.NewTicker(10 * time.Second)

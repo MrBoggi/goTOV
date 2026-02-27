@@ -218,6 +218,23 @@ func (s *SQLiteStore) ListActiveFermentations() ([]FermentationState, error) {
 	return active, err
 }
 
+func (s *SQLiteStore) GetState(id int64) (FermentationState, error) {
+	var state FermentationState
+	err := s.DB.Get(&state, "SELECT * FROM fermentation_states WHERE id = ?", id)
+	return state, err
+}
+
+func (s *SQLiteStore) GetStateByTank(tankID string) (FermentationState, error) {
+	var state FermentationState
+	err := s.DB.Get(&state, "SELECT * FROM fermentation_states WHERE tank_id = ? AND status = ? ORDER BY started_at DESC LIMIT 1", tankID, StatusRunning)
+	return state, err
+}
+
+func (s *SQLiteStore) StopFermentation(id int64) error {
+	_, err := s.DB.Exec("UPDATE fermentation_states SET status = ? WHERE id = ?", StatusStopped, id)
+	return err
+}
+
 func (s *SQLiteStore) UpdateState(state FermentationState) error {
 	_, err := s.DB.NamedExec(`
 UPDATE fermentation_states 

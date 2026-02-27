@@ -16,6 +16,11 @@ type StartFermentationRequest struct {
 	BatchID string `json:"batchID"`
 }
 
+type StopFermentationRequest struct {
+	ID     int64  `json:"id"`
+	TankID string `json:"tankID"`
+}
+
 func (s *Server) handleSaveFermentationPlan(w http.ResponseWriter, r *http.Request) {
 	var plan fermentation.FermentationPlan
 	if err := json.NewDecoder(r.Body).Decode(&plan); err != nil {
@@ -88,6 +93,35 @@ func (s *Server) handleStartFermentation(w http.ResponseWriter, r *http.Request)
 	})
 }
 
+func (s *Server) handleStopFermentation(w http.ResponseWriter, r *http.Request) {
+	var req StopFermentationRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		s.log.Error().Err(err).Msg("failed to decode stop fermentation request")
+		http.Error(w, "invalid JSON", http.StatusBadRequest)
+		return
+	}
+
+	var err error
+	if req.ID != 0 {
+		err = s.engine.StopFermentation(req.ID)
+	} else if req.TankID != "" {
+		err = s.engine.StopByTank(req.TankID)
+	} else {
+		http.Error(w, "missing either id or tankID", http.StatusBadRequest)
+		return
+	}
+
+	if err != nil {
+		s.log.Error().Err(err).Msg("failed to stop fermentation")
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{"status": "ok"})
+}
+
 func (s *Server) handleDeleteFermentationPlan(w http.ResponseWriter, r *http.Request) {
 	idStr := chi.URLParam(r, "id")
 	id, err := strconv.ParseInt(idStr, 10, 64)
@@ -146,6 +180,7 @@ func (s *Server) handleGetApiDocs(w http.ResponseWriter, r *http.Request) {
 			{"method": "GET", "path": "/api/fermentation/plans", "description": "List all fermentation plans"},
 			{"method": "POST", "path": "/api/fermentation/plan", "description": "Save a new fermentation plan"},
 			{"method": "POST", "path": "/api/fermentation/start", "description": "Start a fermentation process (requires planID, tankID)"},
+			{"method": "POST", "path": "/api/fermentation/stop", "description": "Stop an active fermentation (requires tankID or id)"},
 			{"method": "GET", "path": "/api/fermentation/status", "description": "Get status of all active fermentations"},
 			{"method": "GET", "path": "/api/fermentation/docs", "description": "This documentation"},
 			{"method": "DELETE", "path": "/api/fermentation/plan/{id}", "description": "Delete a fermentation plan (if not in use)"},

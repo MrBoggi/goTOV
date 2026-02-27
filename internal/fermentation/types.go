@@ -24,6 +24,7 @@ const (
 	StatusRunning   = "RUNNING"
 	StatusCompleted = "COMPLETED"
 	StatusPaused    = "PAUSED"
+	StatusStopped   = "STOPPED"
 	StatusError     = "ERROR"
 )
 
