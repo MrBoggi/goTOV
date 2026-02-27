@@ -18,11 +18,9 @@ Alle endringer skal følge "Feature Branch"-modellen med utgangspunkt i `Develop
 5.  **Commit:** Stage og commit endringene med en tydelig melding (Conventional Commits).
     * `git add .`
     * `git commit -m "feat: beskrivelse av endring"`
-6.  **Merge:** Gå tilbake til Development og flett inn endringene.
-    * `git checkout development`
-    * `git merge &lt;branch-navn&gt;`
-7.  **Opprydding:** Slett branchen lokalt etter merge (hvis vellykket).
-    * `git branch -d &lt;branch-navn&gt;`
+6.  **Push og PR:** Push branchen til origin og opprett en Pull Request mot `development`. ALDRI merge direkte til `development` lokalt.
+    * `git push origin <branch-navn>`
+    * Opprett PR mot `development` (via GitHub CLI eller manuelt).
 
 ## 2. GO (GOLANG) RETNINGSLINJER
 
