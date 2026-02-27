@@ -76,7 +76,7 @@ func (e *Engine) AddFermentation(state *FermentationState) {
 
 func (e *Engine) run() {
 	defer e.wg.Done()
-	ticker := time.NewTicker(1 * time.Minute)
+	ticker := time.NewTicker(10 * time.Second)
 	defer ticker.Stop()
 
 	for {
@@ -173,6 +173,7 @@ func (e *Engine) processOne(state *FermentationState) (bool, error) {
 		defer cancel()
 
 		tempTag := fmt.Sprintf("ns=4;s=MAIN.fbUA.fermenter%sTemp", state.TankID)
+		e.log.Debug().Str("tag", tempTag).Msg("🌡️ Reading current temperature")
 		val, err := e.client.ReadNodeValue(ctx, tempTag)
 		if err != nil {
 			return false, fmt.Errorf("failed to read current temp: %w", err)
@@ -209,6 +210,13 @@ func (e *Engine) processOne(state *FermentationState) (bool, error) {
 
 		e.setTankHardware(state.TankID, cooling, heating)
 		coolingActive = cooling
+
+		// Log to history every loop (or we could throttle)
+		// Since the loop is 10s, logging every minute would be better
+		// But for now, let's log every 10s to see data flowing.
+		if err := e.store.LogData(state.PlanID, state.TankID, state.BatchID, currentTemp, target, cooling, heating); err != nil {
+			e.log.Error().Err(err).Msg("failed to log fermentation history")
+		}
 	}
 
 	return coolingActive, nil
