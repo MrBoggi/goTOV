@@ -105,3 +105,11 @@ type FermentationState struct {
 	Status        string     `db:"status" json:"status"`
 	Transitioning bool       `db:"-" json:"transitioning"`
 }
+
+type FermentationHistoryEntry struct {
+	Timestamp     SQLiteTime `db:"timestamp" json:"timestamp"`
+	Temperature   float64    `db:"temperature" json:"temperature"`
+	TargetTemp    float64    `db:"target_temp" json:"targetTemp"`
+	CoolingValve  bool       `db:"cooling_valve" json:"coolingValve"`
+	HeatingJacket bool       `db:"heating_jacket" json:"heatingJacket"`
+}
