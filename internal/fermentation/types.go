@@ -114,3 +114,19 @@ type FermentationHistoryEntry struct {
 	CoolingValve  bool       `db:"cooling_valve" json:"coolingValve"`
 	HeatingJacket bool       `db:"heating_jacket" json:"heatingJacket"`
 }
+
+// GlycolStatus representerer nåværende status for glykol-kjøleren
+type GlycolStatus struct {
+	Temperature    float64             `json:"temperature"`
+	Pressure       *float64            `json:"pressure"`
+	LoadPercentage float64             `json:"loadPercentage"`
+	Trend24h       []GlycolHistoryData `json:"trend24h"`
+}
+
+// GlycolHistoryData er et enkelt datapunkt for glykol trendgrafer
+type GlycolHistoryData struct {
+	Timestamp SQLiteTime `db:"timestamp" json:"timestamp"`
+	Value     float64    `db:"temperature" json:"value"` // Exposed as "value" in API trend for graphs
+	Pressure  *float64   `db:"pressure" json:"-"`
+	LoadPct   float64    `db:"load_percentage" json:"-"`
+}
