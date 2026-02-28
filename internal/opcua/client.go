@@ -157,6 +157,14 @@ func (c *Client) ReadNodeValue(ctx context.Context, nodeID string) (interface{},
 	return val, nil
 }
 
+// GetDisplayName retrieves the stored display name for a node, or the nodeID itself if not found.
+func (c *Client) GetDisplayName(nodeID string) string {
+	if name, ok := c.displayNames[nodeID]; ok {
+		return name
+	}
+	return nodeID
+}
+
 // 🔧 Utility: store display names for later use
 func (c *Client) SetDisplayName(nodeID, name string) {
 	c.displayNames[nodeID] = name

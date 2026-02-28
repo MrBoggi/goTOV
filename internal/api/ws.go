@@ -1,7 +1,9 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"sync"
 	"time"
@@ -58,8 +60,45 @@ func NewServer(log zerolog.Logger, client *opcua.Client, fermentationStore ferme
 
 	if s.client != nil {
 		go s.consumeUpdates()
+		go s.seedCache()
 	}
 	return s
+}
+
+func (s *Server) seedCache() {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	s.log.Info().Msg("🌱 Seeding WebSocket cache from PLC...")
+
+	nodes, err := s.client.ListSymbols(ctx)
+	if err != nil {
+		s.log.Error().Err(err).Msg("❌ Failed to list PLC symbols for seeding")
+		return
+	}
+
+	for _, nodeID := range nodes {
+		val, err := s.client.ReadNodeValue(ctx, nodeID.String())
+		if err != nil {
+			s.log.Warn().Err(err).Msgf("⚠️ Seed failed for %s", nodeID.String())
+			continue
+		}
+
+		msg := WSMessage{
+			Tag:         nodeID.String(),
+			DisplayName: s.client.GetDisplayName(nodeID.String()),
+			Value:       val,
+			ValueType:   fmt.Sprintf("%T", val),
+			Timestamp:   time.Now().UnixMilli(),
+		}
+
+		s.latestMu.Lock()
+		s.latest[msg.Tag] = msg
+		s.latestMu.Unlock()
+
+		s.log.Info().Msgf("🔄 Seeded %s = %v", msg.Tag, val)
+	}
+	s.log.Info().Msg("✅ WebSocket cache seeding complete")
 }
 
 func (s *Server) Router() http.Handler {
