@@ -135,15 +135,20 @@ func (s *Server) handleDeleteFermentationPlan(w http.ResponseWriter, r *http.Req
 	}
 
 	// If force=true, stop all active fermentations using this plan first
-	if r.URL.Query().Get("force") == "true" && s.engine != nil {
+	if r.URL.Query().Get("force") == "true" {
 		active, listErr := s.fermentationStore.ListActiveFermentations()
 		if listErr == nil {
 			for _, a := range active {
 				if a.PlanID == id {
-					if stopErr := s.engine.StopFermentation(a.ID); stopErr != nil {
-						s.log.Error().Err(stopErr).Int64("fermentationID", a.ID).Msg("failed to stop fermentation before plan deletion")
+					// Stop in store (DB) first — this is the source of truth for DeletePlan
+					if stopErr := s.fermentationStore.StopFermentation(a.ID); stopErr != nil {
+						s.log.Error().Err(stopErr).Int64("fermentationID", a.ID).Msg("failed to stop fermentation in store before plan deletion")
 					} else {
-						s.log.Info().Int64("fermentationID", a.ID).Str("tank", a.TankID).Msg("stopped fermentation before plan deletion")
+						s.log.Info().Int64("fermentationID", a.ID).Str("tank", a.TankID).Msg("stopped fermentation in store before plan deletion")
+					}
+					// Also remove from engine's in-memory map if engine is running
+					if s.engine != nil {
+						s.engine.RemoveFermentation(a.ID)
 					}
 				}
 			}

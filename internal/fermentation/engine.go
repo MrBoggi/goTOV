@@ -74,6 +74,15 @@ func (e *Engine) AddFermentation(state *FermentationState) {
 	e.log.Info().Int64("id", state.ID).Msg("➕ Added fermentation to engine")
 }
 
+// RemoveFermentation removes a fermentation from the engine's in-memory active map
+// without touching the database. Use this when the DB has already been updated.
+func (e *Engine) RemoveFermentation(id int64) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	delete(e.active, id)
+	e.log.Info().Int64("id", id).Msg("➖ Removed fermentation from engine map")
+}
+
 func (e *Engine) StopFermentation(id int64) error {
 	e.mu.Lock()
 	state, ok := e.active[id]
