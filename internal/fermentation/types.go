@@ -15,6 +15,8 @@ type SQLiteTime struct {
 
 // sqliteTimeFormats lists formats we may encounter in the database.
 var sqliteTimeFormats = []string{
+	"2006-01-02 15:04:05.999999999 +0000 UTC", // Go time.Time.String() format
+	"2006-01-02 15:04:05.999999999 -0700 MST", // Go time.Time.String() with named timezone
 	time.RFC3339Nano,
 	time.RFC3339,
 	"2006-01-02 15:04:05.999999999-07:00",
