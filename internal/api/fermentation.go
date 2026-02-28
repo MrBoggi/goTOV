@@ -200,11 +200,19 @@ func (s *Server) handleDeleteFermentationPlan(w http.ResponseWriter, r *http.Req
 }
 
 func (s *Server) handleGetFermentationStatus(w http.ResponseWriter, r *http.Request) {
-	active, err := s.fermentationStore.ListActiveFermentations()
-	if err != nil {
-		s.log.Error().Err(err).Msg("failed to list active fermentations")
-		http.Error(w, "failed to list active fermentations", http.StatusInternalServerError)
-		return
+	var active []fermentation.FermentationState
+	var err error
+
+	// Prefer engine states (includes computed fields like transitioning)
+	if s.engine != nil {
+		active = s.engine.GetActiveStates()
+	} else {
+		active, err = s.fermentationStore.ListActiveFermentations()
+		if err != nil {
+			s.log.Error().Err(err).Msg("failed to list active fermentations")
+			http.Error(w, "failed to list active fermentations", http.StatusInternalServerError)
+			return
+		}
 	}
 
 	// Enrich with Plan details for the UI

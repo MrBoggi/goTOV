@@ -83,6 +83,19 @@ func (e *Engine) RemoveFermentation(id int64) {
 	e.log.Info().Int64("id", id).Msg("➖ Removed fermentation from engine map")
 }
 
+// GetActiveStates returns a snapshot of all active fermentation states
+// including computed fields like Transitioning.
+func (e *Engine) GetActiveStates() []FermentationState {
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+
+	states := make([]FermentationState, 0, len(e.active))
+	for _, s := range e.active {
+		states = append(states, *s)
+	}
+	return states
+}
+
 func (e *Engine) StopFermentation(id int64) error {
 	e.mu.Lock()
 	state, ok := e.active[id]
@@ -102,7 +115,24 @@ func (e *Engine) StopFermentation(id int64) error {
 	}
 
 	if ok {
-		e.log.Info().Int64("id", id).Str("tank", state.TankID).Msg("🛑 Stopped fermentation in engine and store")
+		// Turn off all hardware for this tank
+		e.setTankHardware(state.TankID, false, false)
+
+		// Glycol Pump Interlock: Only run if at least one valve is open
+		// A simple check: if no more active fermentations in engine, stop pump
+		activeCount := len(e.active)
+		e.mu.RUnlock()
+
+		if activeCount == 0 && e.client != nil {
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			err := e.client.WriteTag(ctx, "ns=4;s=MAIN.fbUA.glykolkjolerPumpe", false)
+			if err != nil {
+				e.log.Error().Err(err).Msg("failed to turn off glycol pump after stop")
+			}
+		}
+
+		e.log.Info().Int64("id", id).Str("tank", state.TankID).Msg("🛑 Stopped fermentation in engine and store (SAFE SHUTDOWN)")
 	}
 	return nil
 }
@@ -200,31 +230,8 @@ func (e *Engine) processOne(state *FermentationState) (bool, error) {
 
 	currentStep := steps[state.StepIndex]
 
-	// 2. Check if step duration is finished
-	elapsed := time.Since(state.StepStartedAt.Time).Hours()
-	if elapsed >= currentStep.DurationHours {
-		e.log.Info().
-			Int64("id", state.ID).
-			Int("from", state.StepIndex).
-			Int("to", state.StepIndex+1).
-			Msg("⏭️ Advancing to next fermentation step")
-
-		state.StepIndex++
-		state.StepStartedAt = SQLiteTime{time.Now().UTC()}
-
-		if state.StepIndex < len(steps) {
-			state.TargetTemp = steps[state.StepIndex].Temperature
-		} else {
-			// Finished all steps
-			return e.processOne(state) // Recurse to handle completion
-		}
-
-		if err := e.store.UpdateState(*state); err != nil {
-			e.log.Error().Err(err).Msg("failed to persist state update")
-		}
-	}
-
-	// 3. Thermostat Logic
+	// 2. Thermostat Logic & Transitioning Check
+	// We read temperature early to determine if we are "transitioning"
 	coolingActive := false
 	if e.client != nil {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -247,11 +254,57 @@ func (e *Engine) processOne(state *FermentationState) (bool, error) {
 			}
 		}
 
+		target := float32(state.TargetTemp)
+		hysteresis := float32(0.2)
 		heating := false
 		cooling := false
-		hysteresis := float32(0.2)
-		target := float32(state.TargetTemp)
 
+		// Transitioning check: are we within ±0.2°C of setpoint?
+		withinRange := currentTemp >= target-hysteresis && currentTemp <= target+hysteresis
+
+		if !withinRange {
+			state.Transitioning = true
+			// If we are transitioning, we keep resetting StepStartedAt to "now"
+			// until we are within range.
+			state.StepStartedAt = SQLiteTime{time.Now().UTC()}
+			if err := e.store.UpdateState(*state); err != nil {
+				e.log.Error().Err(err).Msg("failed to update state during transition")
+			}
+			e.log.Debug().
+				Str("tank", state.TankID).
+				Float32("current", currentTemp).
+				Float32("target", target).
+				Msg("⏳ Transitioning to setpoint — time not counting")
+		} else {
+			state.Transitioning = false
+		}
+
+		// 3. Check if step duration is finished (ONLY if not transitioning)
+		if !state.Transitioning {
+			elapsed := time.Since(state.StepStartedAt.Time).Hours()
+			if elapsed >= currentStep.DurationHours {
+				e.log.Info().
+					Int64("id", state.ID).
+					Int("from", state.StepIndex).
+					Int("to", state.StepIndex+1).
+					Msg("⏭️ Advancing to next fermentation step")
+
+				state.StepIndex++
+				state.StepStartedAt = SQLiteTime{time.Now().UTC()}
+
+				if state.StepIndex < len(steps) {
+					state.TargetTemp = steps[state.StepIndex].Temperature
+					// Recurse or just let the next loop handle it?
+					// Let's recurse to ensure new target is applied immediately
+					return e.processOne(state)
+				} else {
+					// Finished all steps
+					return e.processOne(state) // Recurse to handle completion
+				}
+			}
+		}
+
+		// 4. Update Thermostat States based on currentTemp
 		if currentTemp > target+hysteresis {
 			cooling = true
 		} else if currentTemp < target-hysteresis {
@@ -264,14 +317,13 @@ func (e *Engine) processOne(state *FermentationState) (bool, error) {
 			Float32("target", target).
 			Bool("cooling", cooling).
 			Bool("heating", heating).
+			Bool("transitioning", state.Transitioning).
 			Msg("🌡️ Thermostat decision")
 
 		e.setTankHardware(state.TankID, cooling, heating)
 		coolingActive = cooling
 
-		// Log to history every loop (or we could throttle)
-		// Since the loop is 10s, logging every minute would be better
-		// But for now, let's log every 10s to see data flowing.
+		// Log to history
 		if err := e.store.LogData(state.PlanID, state.TankID, state.BatchID, currentTemp, target, cooling, heating); err != nil {
 			e.log.Error().Err(err).Msg("failed to log fermentation history")
 		}

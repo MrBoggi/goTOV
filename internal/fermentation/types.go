@@ -103,4 +103,5 @@ type FermentationState struct {
 	StepDuration  float64    `db:"-" json:"stepDuration,omitempty"`
 	TargetTemp    float64    `db:"target_temp" json:"targetTemp"`
 	Status        string     `db:"status" json:"status"`
+	Transitioning bool       `db:"-" json:"transitioning"`
 }
