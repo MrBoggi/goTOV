@@ -113,6 +113,15 @@ CREATE TABLE IF NOT EXISTS fermentation_history (
 		}
 	}
 
+	// Check for step_active column in fermentation_states
+	err = s.DB.Get(&count, "SELECT count(*) FROM pragma_table_info('fermentation_states') WHERE name='step_active'")
+	if err == nil && count == 0 {
+		_, err = s.DB.Exec("ALTER TABLE fermentation_states ADD COLUMN step_active BOOLEAN NOT NULL DEFAULT 0")
+		if err != nil {
+			return fmt.Errorf("failed to add step_active column: %w", err)
+		}
+	}
+
 	// Check for legacy tank_no column in fermentation_states (can cause NOT NULL constraint failures)
 	err = s.DB.Get(&count, "SELECT count(*) FROM pragma_table_info('fermentation_states') WHERE name='tank_no'")
 	if err == nil && count > 0 {
@@ -198,11 +207,12 @@ func (s *SQLiteStore) StartFermentation(planID int64, tankID string, batchID str
 		StepStartedAt: now,
 		TargetTemp:    steps[0].Temperature,
 		Status:        StatusRunning,
+		StepActive:    false,
 	}
 
 	res, err := s.DB.NamedExec(`
-INSERT INTO fermentation_states (plan_id, tank_id, batch_id, step_index, started_at, step_started_at, target_temp, status)
-VALUES (:plan_id, :tank_id, :batch_id, :step_index, :started_at, :step_started_at, :target_temp, :status)`,
+INSERT INTO fermentation_states (plan_id, tank_id, batch_id, step_index, started_at, step_started_at, target_temp, status, step_active)
+VALUES (:plan_id, :tank_id, :batch_id, :step_index, :started_at, :step_started_at, :target_temp, :status, :step_active)`,
 		state)
 	if err != nil {
 		return 0, fmt.Errorf("insert fermentation state: %w", err)
@@ -248,7 +258,7 @@ func (s *SQLiteStore) StopFermentation(id int64) error {
 func (s *SQLiteStore) UpdateState(state FermentationState) error {
 	_, err := s.DB.NamedExec(`
 UPDATE fermentation_states 
-SET step_index = :step_index, step_started_at = :step_started_at, target_temp = :target_temp, status = :status
+SET step_index = :step_index, step_started_at = :step_started_at, target_temp = :target_temp, status = :status, step_active = :step_active
 WHERE id = :id`,
 		state)
 	return err
