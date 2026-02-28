@@ -201,7 +201,7 @@ func (e *Engine) processOne(state *FermentationState) (bool, error) {
 	currentStep := steps[state.StepIndex]
 
 	// 2. Check if step duration is finished
-	elapsed := time.Since(state.StepStartedAt).Hours()
+	elapsed := time.Since(state.StepStartedAt.Time).Hours()
 	if elapsed >= currentStep.DurationHours {
 		e.log.Info().
 			Int64("id", state.ID).
@@ -210,7 +210,7 @@ func (e *Engine) processOne(state *FermentationState) (bool, error) {
 			Msg("⏭️ Advancing to next fermentation step")
 
 		state.StepIndex++
-		state.StepStartedAt = time.Now().UTC()
+		state.StepStartedAt = SQLiteTime{time.Now().UTC()}
 
 		if state.StepIndex < len(steps) {
 			state.TargetTemp = steps[state.StepIndex].Temperature

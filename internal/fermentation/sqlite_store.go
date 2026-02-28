@@ -188,7 +188,7 @@ func (s *SQLiteStore) StartFermentation(planID int64, tankID string, batchID str
 		return 0, fmt.Errorf("get steps for starting fermentation: %w", err)
 	}
 
-	now := time.Now().UTC()
+	now := SQLiteTime{time.Now().UTC()}
 	state := FermentationState{
 		PlanID:        planID,
 		TankID:        tankID,
