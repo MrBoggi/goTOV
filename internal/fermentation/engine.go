@@ -262,25 +262,40 @@ func (e *Engine) processOne(state *FermentationState) (bool, error) {
 		// Transitioning check: are we within ±0.2°C of setpoint?
 		withinRange := currentTemp >= target-hysteresis && currentTemp <= target+hysteresis
 
-		if !withinRange {
-			state.Transitioning = true
-			// If we are transitioning, we keep resetting StepStartedAt to "now"
-			// until we are within range.
-			state.StepStartedAt = SQLiteTime{time.Now().UTC()}
-			if err := e.store.UpdateState(*state); err != nil {
-				e.log.Error().Err(err).Msg("failed to update state during transition")
+		if !state.StepActive {
+			if withinRange {
+				state.StepActive = true
+				state.Transitioning = false
+				// Save state since StepActive changed
+				if err := e.store.UpdateState(*state); err != nil {
+					e.log.Error().Err(err).Msg("failed to update state when step became active")
+				}
+				e.log.Info().
+					Str("tank", state.TankID).
+					Float32("current", currentTemp).
+					Float32("target", target).
+					Msg("🎯 Reached setpoint — step timer has started")
+			} else {
+				state.Transitioning = true
+				// If we are transitioning, we keep resetting StepStartedAt to "now"
+				// until we are within range.
+				state.StepStartedAt = SQLiteTime{time.Now().UTC()}
+				if err := e.store.UpdateState(*state); err != nil {
+					e.log.Error().Err(err).Msg("failed to update state during transition")
+				}
+				e.log.Debug().
+					Str("tank", state.TankID).
+					Float32("current", currentTemp).
+					Float32("target", target).
+					Msg("⏳ Transitioning to setpoint — time not counting")
 			}
-			e.log.Debug().
-				Str("tank", state.TankID).
-				Float32("current", currentTemp).
-				Float32("target", target).
-				Msg("⏳ Transitioning to setpoint — time not counting")
 		} else {
+			// Even if we fall out of range, transitioning remains false
 			state.Transitioning = false
 		}
 
-		// 3. Check if step duration is finished (ONLY if not transitioning)
-		if !state.Transitioning {
+		// 3. Check if step duration is finished (ONLY if StepActive is true)
+		if state.StepActive {
 			elapsed := time.Since(state.StepStartedAt.Time).Hours()
 			if elapsed >= currentStep.DurationHours {
 				e.log.Info().
@@ -291,6 +306,7 @@ func (e *Engine) processOne(state *FermentationState) (bool, error) {
 
 				state.StepIndex++
 				state.StepStartedAt = SQLiteTime{time.Now().UTC()}
+				state.StepActive = false // Reset active flag for the new step
 
 				if state.StepIndex < len(steps) {
 					state.TargetTemp = steps[state.StepIndex].Temperature
