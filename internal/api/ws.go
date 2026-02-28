@@ -145,6 +145,7 @@ func (s *Server) Router() http.Handler {
 	r.Get("/api/fermentation/docs", s.handleGetApiDocs)
 	r.Delete("/api/fermentation/plan/{id}", s.handleDeleteFermentationPlan)
 	r.Get("/api/tanks", s.handleListTanks)
+	r.Get("/api/glycol/status", s.handleGetGlycolStatus)
 
 	// ----------------------------------------------------
 	// STATIC FILES (INGENTING annet fjernes eller endres)

@@ -88,6 +88,14 @@ CREATE TABLE IF NOT EXISTS fermentation_history (
     heating_jacket BOOLEAN NOT NULL,
     FOREIGN KEY(plan_id) REFERENCES fermentation_plans(id)
 );
+
+CREATE TABLE IF NOT EXISTS glycol_history (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    timestamp TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    temperature REAL NOT NULL,
+    pressure REAL,
+    load_percentage REAL NOT NULL
+);
 `
 	_, err := s.DB.Exec(schema)
 	if err != nil {
@@ -332,6 +340,26 @@ func (s *SQLiteStore) DeletePlan(id int64) error {
 }
 
 func (s *SQLiteStore) Clear() error {
-	_, err := s.DB.Exec("DELETE FROM fermentation_steps; DELETE FROM fermentation_states; DELETE FROM fermentation_plans;")
+	_, err := s.DB.Exec("DELETE FROM fermentation_steps; DELETE FROM fermentation_states; DELETE FROM fermentation_plans; DELETE FROM glycol_history;")
 	return err
+}
+
+func (s *SQLiteStore) LogGlycolData(temp float64, pressure *float64, load float64) error {
+	_, err := s.DB.Exec(`
+INSERT INTO glycol_history (temperature, pressure, load_percentage)
+VALUES (?, ?, ?)`,
+		temp, pressure, load)
+	return err
+}
+
+func (s *SQLiteStore) GetGlycolHistory(hours float64) ([]GlycolHistoryData, error) {
+	var history []GlycolHistoryData
+	query := `
+		SELECT timestamp, temperature, pressure, load_percentage 
+		FROM glycol_history 
+		WHERE datetime(timestamp) >= datetime('now', '-' || ? || ' hours')
+		ORDER BY timestamp ASC`
+
+	err := s.DB.Select(&history, query, hours)
+	return history, err
 }

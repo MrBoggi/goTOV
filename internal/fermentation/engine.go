@@ -167,10 +167,15 @@ func (e *Engine) run() {
 	ticker := time.NewTicker(10 * time.Second)
 	defer ticker.Stop()
 
+	glycolTicker := time.NewTicker(1 * time.Minute)
+	defer glycolTicker.Stop()
+
 	for {
 		select {
 		case <-ticker.C:
 			e.processAll()
+		case <-glycolTicker.C:
+			e.logGlycol()
 		case <-e.stop:
 			return
 		}
@@ -205,6 +210,52 @@ func (e *Engine) processAll() {
 		if err != nil {
 			e.log.Error().Err(err).Msg("failed to sync glycol pump")
 		}
+	}
+}
+
+func (e *Engine) logGlycol() {
+	e.mu.RLock()
+	activeCount := len(e.active)
+	e.mu.RUnlock()
+
+	// Only log if there's an active fermentation
+	if activeCount == 0 {
+		return
+	}
+
+	if e.client == nil {
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	val, err := e.client.ReadNodeValue(ctx, "ns=4;s=MAIN.fbUA.glykolkjolerTemp")
+	if err != nil {
+		e.log.Error().Err(err).Msg("failed to read glycol temperature for logging")
+		return
+	}
+
+	var temp float64
+	switch v := val.(type) {
+	case float32:
+		temp = float64(v)
+	case float64:
+		temp = v
+	default:
+		e.log.Warn().Interface("val", val).Msg("unexpected type for glycol temp")
+		return
+	}
+
+	// For now, load is 0 and pressure is 0 as per user instructions
+	load := 0.0
+	pressureValue := 0.0
+	pressure := &pressureValue
+
+	if err := e.store.LogGlycolData(temp, pressure, load); err != nil {
+		e.log.Error().Err(err).Msg("failed to log glycol history")
+	} else {
+		e.log.Debug().Float64("temp", temp).Msg("📊 Logged glycol history data")
 	}
 }
 

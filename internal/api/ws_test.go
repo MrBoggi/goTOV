@@ -29,6 +29,8 @@ type MockFermentationStore struct {
 	StopFermentationFunc        func(id int64) error
 	LogDataFunc                 func(planID int64, tankID string, batchID string, temp float32, target float32, valve bool, jacket bool) error
 	GetHistoryFunc              func(planID int64, hours float64) ([]fermentation.FermentationHistoryEntry, error)
+	LogGlycolDataFunc           func(temp float64, pressure *float64, load float64) error
+	GetGlycolHistoryFunc        func(hours float64) ([]fermentation.GlycolHistoryData, error)
 }
 
 func (m *MockFermentationStore) SavePlan(plan fermentation.FermentationPlan) (int64, error) {
@@ -115,6 +117,20 @@ func (m *MockFermentationStore) LogData(planID int64, tankID string, batchID str
 func (m *MockFermentationStore) GetHistory(planID int64, hours float64) ([]fermentation.FermentationHistoryEntry, error) {
 	if m.GetHistoryFunc != nil {
 		return m.GetHistoryFunc(planID, hours)
+	}
+	return nil, nil
+}
+
+func (m *MockFermentationStore) LogGlycolData(temp float64, pressure *float64, load float64) error {
+	if m.LogGlycolDataFunc != nil {
+		return m.LogGlycolDataFunc(temp, pressure, load)
+	}
+	return nil
+}
+
+func (m *MockFermentationStore) GetGlycolHistory(hours float64) ([]fermentation.GlycolHistoryData, error) {
+	if m.GetGlycolHistoryFunc != nil {
+		return m.GetGlycolHistoryFunc(hours)
 	}
 	return nil, nil
 }
