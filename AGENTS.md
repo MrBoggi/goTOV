@@ -25,6 +25,8 @@ Welcome to **goTOV** (Go Tæsse Øl Verksted). You are assisting in the developm
     - **Error Handling**: Never ignore errors (`_`). Wrap with context: `fmt.Errorf("context: %w", err)`.
     - **Context**: Pass `context.Context` as the first argument for I/O and PLC calls.
     - **Concurrency**: Use standard patterns (Channels, WaitGroups) for real-time tag updates.
+    - **JSON Naming**: Always use **camelCase** for JSON tags in structs. Suffixes like "ID" should be lowercase "id" (e.g., `batchId`, `planId`).
+    - **API Documentation**: Update `handleGetApiDocs` when adding or changing endpoints. Ensure JSON keys in responses match the struct tags.
 
 ### 2. Git Workflow (MANDATORY)
 - **Base Branch**: `development`.

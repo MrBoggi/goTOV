@@ -66,20 +66,20 @@ func (st SQLiteTime) Value() (driver.Value, error) {
 
 // Et enkelt steg i en plan vi LAGRER i SQLite.
 type FermentationStep struct {
-	StepNumber    int     `db:"step_number" json:"step_number"`
+	StepNumber    int     `db:"step_number" json:"stepNumber"`
 	Temperature   float64 `db:"temperature" json:"temperature"`
-	DurationHours float64 `db:"duration_hours" json:"duration_hours"`
+	DurationHours float64 `db:"duration_hours" json:"durationHours"`
 	Description   string  `db:"description" json:"description"`
 	Type          string  `db:"type" json:"type"`
 }
 
 // Selve planen – én plan per recipe.
 type FermentationPlan struct {
-	ID         int64              `db:"id"`
-	Name       string             `db:"name"`
-	RecipeID   string             `db:"recipe_id"`
-	TotalSteps int                `db:"total_steps"`
-	Steps      []FermentationStep `db:"-"` // hentes separat
+	ID         int64              `db:"id" json:"id"`
+	Name       string             `db:"name" json:"name"`
+	RecipeID   string             `db:"recipe_id" json:"recipeId"`
+	TotalSteps int                `db:"total_steps" json:"totalSteps"`
+	Steps      []FermentationStep `db:"-" json:"steps,omitempty"` // hentes separat
 }
 
 const (
@@ -93,10 +93,10 @@ const (
 // Til bruk av prosessmotoren (kommer senere)
 type FermentationState struct {
 	ID            int64      `db:"id" json:"id"`
-	PlanID        int64      `db:"plan_id" json:"planID"`
+	PlanID        int64      `db:"plan_id" json:"planId"`
 	PlanName      string     `db:"-" json:"planName,omitempty"`
-	TankID        string     `db:"tank_id" json:"tankID"`
-	BatchID       string     `db:"batch_id" json:"batchID"`
+	TankID        string     `db:"tank_id" json:"tankId"`
+	BatchID       string     `db:"batch_id" json:"batchId"`
 	StepIndex     int        `db:"step_index" json:"stepIndex"`
 	StartedAt     SQLiteTime `db:"started_at" json:"startedAt"`
 	StepStartedAt SQLiteTime `db:"step_started_at" json:"stepStartedAt"`
