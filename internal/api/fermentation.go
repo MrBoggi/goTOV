@@ -40,7 +40,7 @@ func (s *Server) handleSaveFermentationPlan(w http.ResponseWriter, r *http.Reque
 	w.WriteHeader(http.StatusCreated)
 	_ = json.NewEncoder(w).Encode(map[string]interface{}{
 		"status": "ok",
-		"planID": planID,
+		"planId": planID,
 	})
 }
 
@@ -95,7 +95,7 @@ func (s *Server) handleStartFermentation(w http.ResponseWriter, r *http.Request)
 	w.WriteHeader(http.StatusOK)
 	_ = json.NewEncoder(w).Encode(map[string]interface{}{
 		"status":         "ok",
-		"fermentationID": fermentationID,
+		"fermentationId": fermentationID,
 	})
 }
 
@@ -186,8 +186,8 @@ func (s *Server) handleDeleteFermentationPlan(w http.ResponseWriter, r *http.Req
 			}
 
 			_ = json.NewEncoder(w).Encode(map[string]interface{}{
-				"error":        "Plan is currently in use by active fermentations",
-				"active_tanks": tanks,
+				"error":       "Plan is currently in use by active fermentations",
+				"activeTanks": tanks,
 			})
 			return
 		}

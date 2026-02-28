@@ -189,7 +189,7 @@ func TestSaveFermentationPlanEndpoint(t *testing.T) {
 	err = json.Unmarshal(rr.Body.Bytes(), &responseMap)
 	assert.NoError(t, err)
 	assert.Equal(t, "ok", responseMap["status"])
-	assert.Equal(t, float64(42), responseMap["planID"])
+	assert.Equal(t, float64(42), responseMap["planId"])
 }
 
 func TestListFermentationPlansEndpoint(t *testing.T) {
