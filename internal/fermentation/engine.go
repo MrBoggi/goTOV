@@ -20,15 +20,24 @@ type Engine struct {
 
 	mu     sync.RWMutex
 	active map[int64]*FermentationState
+
+	// Glycol load tracking
+	glycolMu            sync.Mutex
+	pumpLastState       bool
+	pumpOnSince         time.Time
+	pumpAccumulatedTime time.Duration
+	lastGlycolLogTime   time.Time
+	currentGlycolLoad   float64
 }
 
 func NewEngine(store FermentationStore, client *opcua.Client, log zerolog.Logger) *Engine {
 	return &Engine{
-		store:  store,
-		client: client,
-		log:    log,
-		stop:   make(chan struct{}),
-		active: make(map[int64]*FermentationState),
+		store:             store,
+		client:            client,
+		log:               log,
+		stop:              make(chan struct{}),
+		active:            make(map[int64]*FermentationState),
+		lastGlycolLogTime: time.Now(),
 	}
 }
 
@@ -211,6 +220,32 @@ func (e *Engine) processAll() {
 			e.log.Error().Err(err).Msg("failed to sync glycol pump")
 		}
 	}
+
+	// Track pump duration for duty-cycle calculation
+	e.updatePumpTracking(anyCooling)
+}
+
+func (e *Engine) updatePumpTracking(isCurrentlyOn bool) {
+	e.glycolMu.Lock()
+	defer e.glycolMu.Unlock()
+
+	now := time.Now()
+	if isCurrentlyOn {
+		if !e.pumpLastState {
+			// Turned ON
+			e.pumpOnSince = now
+		} else {
+			// Stayed ON - accumulate duration since last check
+			e.pumpAccumulatedTime += now.Sub(e.pumpOnSince)
+			e.pumpOnSince = now
+		}
+	} else {
+		if e.pumpLastState {
+			// Turned OFF - record final bit of duration
+			e.pumpAccumulatedTime += now.Sub(e.pumpOnSince)
+		}
+	}
+	e.pumpLastState = isCurrentlyOn
 }
 
 func (e *Engine) logGlycol() {
@@ -247,16 +282,45 @@ func (e *Engine) logGlycol() {
 		return
 	}
 
-	// For now, load is 0 and pressure is 0 as per user instructions
-	load := 0.0
+	// Calculate duty cycle since last log
+	e.glycolMu.Lock()
+	now := time.Now()
+
+	// If pump is currently on, add the time since it started/was last checked
+	if e.pumpLastState {
+		e.pumpAccumulatedTime += now.Sub(e.pumpOnSince)
+		e.pumpOnSince = now
+	}
+
+	totalInterval := now.Sub(e.lastGlycolLogTime)
+	var load float64
+	if totalInterval > 0 {
+		load = (float64(e.pumpAccumulatedTime) / float64(totalInterval)) * 100.0
+	}
+	if load > 100 {
+		load = 100
+	}
+
+	e.currentGlycolLoad = load
+	e.pumpAccumulatedTime = 0
+	e.lastGlycolLogTime = now
+	e.glycolMu.Unlock()
+
 	pressureValue := 0.0
 	pressure := &pressureValue
 
 	if err := e.store.LogGlycolData(temp, pressure, load); err != nil {
 		e.log.Error().Err(err).Msg("failed to log glycol history")
 	} else {
-		e.log.Debug().Float64("temp", temp).Msg("📊 Logged glycol history data")
+		e.log.Debug().Float64("temp", temp).Float64("load", load).Msg("📊 Logged glycol history data")
 	}
+}
+
+// GetGlycolLoad returns the last calculated duty-cycle load percentage
+func (e *Engine) GetGlycolLoad() float64 {
+	e.glycolMu.Lock()
+	defer e.glycolMu.Unlock()
+	return e.currentGlycolLoad
 }
 
 func (e *Engine) processOne(state *FermentationState) (bool, error) {
