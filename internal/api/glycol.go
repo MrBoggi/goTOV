@@ -32,18 +32,10 @@ func (s *Server) handleGetGlycolStatus(w http.ResponseWriter, r *http.Request) {
 	// Set static values for now as per instructions
 	status.Pressure = nil
 
-	// Read pump status to set load percentage:
-	// If pump is active, return 100%, else 0%
+	// Read load percentage from engine (calculated duty cycle over last 1 min)
 	status.LoadPercentage = 0.0
-	if s.client != nil {
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cancel()
-		val, err := s.client.ReadNodeValue(ctx, "ns=4;s=MAIN.fbUA.glykolkjolerPumpe")
-		if err == nil {
-			if pumpOk, ok := val.(bool); ok && pumpOk {
-				status.LoadPercentage = 100.0
-			}
-		}
+	if s.engine != nil {
+		status.LoadPercentage = s.engine.GetGlycolLoad()
 	}
 
 	// Fetch history from the last 24 hours
