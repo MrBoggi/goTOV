@@ -263,6 +263,19 @@ VALUES (?, ?, ?, ?, ?, ?, ?)`,
 	return err
 }
 
+func (s *SQLiteStore) GetHistory(planID int64, hours float64) ([]FermentationHistoryEntry, error) {
+	var history []FermentationHistoryEntry
+	query := `
+		SELECT timestamp, temperature, target_temp, cooling_valve, heating_jacket 
+		FROM fermentation_history 
+		WHERE plan_id = ? 
+		AND datetime(timestamp) >= datetime('now', '-' || ? || ' hours')
+		ORDER BY timestamp ASC`
+
+	err := s.DB.Select(&history, query, planID, hours)
+	return history, err
+}
+
 func (s *SQLiteStore) DeletePlan(id int64) error {
 	// 1. Check if plan exists
 	var exists bool

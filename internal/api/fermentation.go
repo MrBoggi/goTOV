@@ -263,3 +263,31 @@ func (s *Server) handleListTanks(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 	_ = json.NewEncoder(w).Encode(tanks)
 }
+
+func (s *Server) handleGetFermentationHistory(w http.ResponseWriter, r *http.Request) {
+	idStr := chi.URLParam(r, "id")
+	id, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil {
+		http.Error(w, "invalid ID format", http.StatusBadRequest)
+		return
+	}
+
+	hoursStr := r.URL.Query().Get("hours")
+	hours := 24.0 // default to 24 hours
+	if hoursStr != "" {
+		if h, err := strconv.ParseFloat(hoursStr, 64); err == nil {
+			hours = h
+		}
+	}
+
+	history, err := s.fermentationStore.GetHistory(id, hours)
+	if err != nil {
+		s.log.Error().Err(err).Int64("planID", id).Msg("failed to fetch fermentation history")
+		http.Error(w, "failed to fetch history", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	_ = json.NewEncoder(w).Encode(history)
+}
