@@ -32,8 +32,13 @@ func (c *Client) SubscribeAll(ctx context.Context, nodes []*ua.NodeID) error {
 		handleMap[handle] = id.String()
 
 		req := opcua.NewMonitoredItemCreateRequestWithDefaults(id, ua.AttributeIDValue, handle)
-		if _, err := sub.Monitor(ctx, ua.TimestampsToReturnBoth, req); err != nil {
+		res, err := sub.Monitor(ctx, ua.TimestampsToReturnBoth, req)
+		if err != nil {
 			c.log.Warn().Err(err).Msgf("⚠️ Failed to monitor %v", id)
+		} else if res.Results[0].StatusCode != ua.StatusOK {
+			c.log.Warn().Msgf("⚠️ Monitoring %v returned non-OK status: %v", id, res.Results[0].StatusCode)
+		} else {
+			c.log.Debug().Msgf("✅ Successfully monitoring %v", id)
 		}
 	}
 
@@ -52,7 +57,13 @@ func (c *Client) SubscribeAll(ctx context.Context, nodes []*ua.NodeID) error {
 				return
 
 			case n := <-ch:
-				if n == nil || n.Value == nil {
+				// Diagnostic heartbeat logging
+				if n == nil {
+					c.log.Debug().Msg("💓 OPC UA Subscription heartbeat (nil notification)")
+					continue
+				}
+				if n.Value == nil {
+					c.log.Debug().Msg("💓 OPC UA Subscription heartbeat (empty notification value)")
 					continue
 				}
 
