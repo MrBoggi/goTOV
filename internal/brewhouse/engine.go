@@ -22,6 +22,7 @@ type Engine struct {
 	state *BrewhouseState
 
 	lastEvaluation time.Time
+	lastHistoryLog time.Time
 	pids           map[string]*PIDController
 }
 
@@ -46,6 +47,17 @@ func (e *Engine) Start() {
 	}
 	e.state = state
 	e.lastEvaluation = time.Now()
+	e.lastHistoryLog = time.Now()
+
+	// Load PID Configs from DB
+	if bkPID, err := e.store.GetPIDConfig("BK"); err == nil {
+		e.state.BKHeater.PID = *bkPID
+		e.state.BKHeater.IsPID = true
+	}
+	if mltPID, err := e.store.GetPIDConfig("MLT"); err == nil {
+		e.state.MLTHeater.PID = *mltPID
+		e.state.MLTHeater.IsPID = true
+	}
 
 	e.wg.Add(1)
 	go e.run()
@@ -72,10 +84,15 @@ func (e *Engine) UpdateState(newState *BrewhouseState) error {
 	// Preserve setpoints when switching Auto -> Manual if they weren't explicitly changed
 	// This ensures smooth transitions.
 	if e.state != nil {
-		if newState.Heater.Mode == ModeManual && e.state.Heater.Mode == ModeAuto {
+		if newState.BKHeater.Mode == ModeManual && e.state.BKHeater.Mode == ModeAuto {
 			// If setpoint in newState is 0 (or default), keep the one from Auto
-			if newState.Heater.Setpoint == 0 {
-				newState.Heater.Setpoint = e.state.Heater.Setpoint
+			if newState.BKHeater.Setpoint == 0 {
+				newState.BKHeater.Setpoint = e.state.BKHeater.Setpoint
+			}
+		}
+		if newState.MLTHeater.Mode == ModeManual && e.state.MLTHeater.Mode == ModeAuto {
+			if newState.MLTHeater.Setpoint == 0 {
+				newState.MLTHeater.Setpoint = e.state.MLTHeater.Setpoint
 			}
 		}
 		// Same for proportional valve if applicable
@@ -137,6 +154,12 @@ func (e *Engine) evaluate(ctx context.Context) {
 	deltaSeconds := now.Sub(e.lastEvaluation).Seconds()
 	e.lastEvaluation = now
 
+	// Periodic History Logging (every 60 seconds)
+	if now.Sub(e.lastHistoryLog) >= 60*time.Second {
+		e.logHistory()
+		e.lastHistoryLog = now
+	}
+
 	// 1. Read Sensors from OPC UA (if exists)
 	if e.client != nil {
 		e.readSensors(ctx)
@@ -162,37 +185,37 @@ func (e *Engine) evaluate(ctx context.Context) {
 	// 3. Evaluate Logic
 
 	// BK Heater with Safety Interlock
-	if e.state.Heater != nil {
-		if e.state.Heater.Mode == ModeAuto {
+	if e.state.BKHeater != nil {
+		if e.state.BKHeater.Mode == ModeAuto {
 			currentTemp := e.state.Sensors["bkTemp"]
-			if e.state.Heater.IsPID {
+			if e.state.BKHeater.IsPID {
 				// Use PID
-				pid, ok := e.pids["heater"]
+				pid, ok := e.pids["bkHeater"]
 				if !ok {
-					pid = NewPIDController(e.state.Heater.PID.P, e.state.Heater.PID.I, e.state.Heater.PID.D, 0, 100)
-					e.pids["heater"] = pid
+					pid = NewPIDController(e.state.BKHeater.PID.P, e.state.BKHeater.PID.I, e.state.BKHeater.PID.D, 0, 100)
+					e.pids["bkHeater"] = pid
 				} else {
 					// Update coefficients in case they changed
-					pid.P = e.state.Heater.PID.P
-					pid.I = e.state.Heater.PID.I
-					pid.D = e.state.Heater.PID.D
+					pid.P = e.state.BKHeater.PID.P
+					pid.I = e.state.BKHeater.PID.I
+					pid.D = e.state.BKHeater.PID.D
 				}
-				e.state.Heater.Command = pid.Calculate(e.state.Heater.Setpoint, currentTemp, deltaSeconds)
+				e.state.BKHeater.Command = pid.Calculate(e.state.BKHeater.Setpoint, currentTemp, deltaSeconds)
 			} else {
 				// Fallback to Bang-Bang
-				if currentTemp < e.state.Heater.Setpoint {
-					e.state.Heater.Command = 100.0
+				if currentTemp < e.state.BKHeater.Setpoint {
+					e.state.BKHeater.Command = 100.0
 				} else {
-					e.state.Heater.Command = 0.0
+					e.state.BKHeater.Command = 0.0
 				}
 				// Reset PID state if it exists
-				if pid, ok := e.pids["heater"]; ok {
+				if pid, ok := e.pids["bkHeater"]; ok {
 					pid.Reset()
 				}
 			}
 		} else {
 			// Manual mode, reset PID
-			if pid, ok := e.pids["heater"]; ok {
+			if pid, ok := e.pids["bkHeater"]; ok {
 				pid.Reset()
 			}
 		}
@@ -200,10 +223,42 @@ func (e *Engine) evaluate(ctx context.Context) {
 		// SAFETY INTERLOCK: Force 0 if bkLevel < 20L
 		bkLevel := e.state.Sensors["bkLevel"]
 		if bkLevel < 20.0 {
-			if e.state.Heater.Command > 0 {
+			if e.state.BKHeater.Command > 0 {
 				e.log.Warn().Float64("bkLevel", bkLevel).Msg("⚠️ BK Heater Interlock active: Level below 20L. Forcing heater OFF.")
 			}
-			e.state.Heater.Command = 0.0
+			e.state.BKHeater.Command = 0.0
+		}
+	}
+
+	// MLT Heater
+	if e.state.MLTHeater != nil {
+		if e.state.MLTHeater.Mode == ModeAuto {
+			currentTemp := e.state.Sensors["mltTemp"]
+			if e.state.MLTHeater.IsPID {
+				pid, ok := e.pids["mltHeater"]
+				if !ok {
+					pid = NewPIDController(e.state.MLTHeater.PID.P, e.state.MLTHeater.PID.I, e.state.MLTHeater.PID.D, 0, 100)
+					e.pids["mltHeater"] = pid
+				} else {
+					pid.P = e.state.MLTHeater.PID.P
+					pid.I = e.state.MLTHeater.PID.I
+					pid.D = e.state.MLTHeater.PID.D
+				}
+				e.state.MLTHeater.Command = pid.Calculate(e.state.MLTHeater.Setpoint, currentTemp, deltaSeconds)
+			} else {
+				if currentTemp < e.state.MLTHeater.Setpoint {
+					e.state.MLTHeater.Command = 100.0
+				} else {
+					e.state.MLTHeater.Command = 0.0
+				}
+				if pid, ok := e.pids["mltHeater"]; ok {
+					pid.Reset()
+				}
+			}
+		} else {
+			if pid, ok := e.pids["mltHeater"]; ok {
+				pid.Reset()
+			}
 		}
 	}
 
@@ -244,9 +299,15 @@ func (e *Engine) writeToUA(ctx context.Context) {
 	}
 
 	// BK Heater
-	if e.state.Heater != nil {
+	if e.state.BKHeater != nil {
 		tag := "ns=4;s=MAIN.fbUA.BK_Heater_State"
-		_ = e.client.WriteTag(ctx, tag, e.state.Heater.Command)
+		_ = e.client.WriteTag(ctx, tag, e.state.BKHeater.Command)
+	}
+
+	// MLT Heater (Note: Assuming we might have a tag for this or it's handled via the same mechanism)
+	if e.state.MLTHeater != nil {
+		tag := "ns=4;s=MAIN.fbUA.MLT_Heater_State" // Added this assumption based on previous tags
+		_ = e.client.WriteTag(ctx, tag, e.state.MLTHeater.Command)
 	}
 }
 
@@ -254,6 +315,7 @@ func (e *Engine) readSensors(ctx context.Context) {
 	// A list of sensors to poll to keep internal state updated
 	sensors := map[string]string{
 		"bkTemp":   "ns=4;s=MAIN.fbUA.bkTemp",
+		"mltTemp":  "ns=4;s=MAIN.fbUA.mltTemp",
 		"mltPH":    "ns=4;s=MAIN.fbUA.mltPH",
 		"mltLevel": "ns=4;s=MAIN.fbUA.mltLevel",
 		"bkLevel":  "ns=4;s=MAIN.fbUA.bkLevel",
@@ -273,5 +335,18 @@ func (e *Engine) readSensors(ctx context.Context) {
 			}
 			e.state.Sensors[key] = floatVal
 		}
+	}
+}
+
+func (e *Engine) logHistory() {
+	entry := &HistoryEntry{
+		Timestamp:  time.Now(),
+		BKTemp:     e.state.Sensors["bkTemp"],
+		MLTTemp:    e.state.Sensors["mltTemp"],
+		BKPadraag:  e.state.BKHeater.Command,
+		MLTPadraag: e.state.MLTHeater.Command,
+	}
+	if err := e.store.LogHistory(entry); err != nil {
+		e.log.Error().Err(err).Msg("Failed to log brewhouse history")
 	}
 }

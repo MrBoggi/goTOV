@@ -39,6 +39,13 @@ func (c *Client) ListSymbols(ctx context.Context) ([]*ua.NodeID, error) {
 
 		// Brewhouse Analog Actuators (Expected)
 		"MAIN.fbUA.PV1_State", "MAIN.fbUA.BK_Heater_State",
+
+		// PID Parameters (New)
+		"MAIN.fbUA.mltSetp", "MAIN.fbUA.mltP", "MAIN.fbUA.mltI", "MAIN.fbUA.mltD",
+		"MAIN.fbUA.bkSetp", "MAIN.fbUA.bkP", "MAIN.fbUA.bkI", "MAIN.fbUA.bkD",
+
+		// PID Outputs (Padraag)
+		"MAIN.fbUA.mltPadraag", "MAIN.fbUA.bkPadraag",
 	}
 
 	var nodes []*ua.NodeID

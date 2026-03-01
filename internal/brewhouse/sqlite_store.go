@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/jmoiron/sqlx"
 	_ "modernc.org/sqlite"
@@ -16,6 +17,10 @@ type Store interface {
 	GetBrewingSession() (string, error)
 	SaveBrewingSession(data string) error
 	LogBrewingSession(data string) error
+	GetPIDConfig(tank string) (*PIDConfig, error)
+	SavePIDConfig(tank string, config *PIDConfig) error
+	LogHistory(entry *HistoryEntry) error
+	GetHistory(hours float64) ([]HistoryEntry, error)
 	Close() error
 }
 
@@ -62,6 +67,20 @@ CREATE TABLE IF NOT EXISTS brewing_logs (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     session_json TEXT NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS equipment_config (
+    id TEXT PRIMARY KEY,
+    config_json TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS brewhouse_history (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    mlt_temp REAL,
+    bk_temp REAL,
+    mlt_padraag REAL,
+    bk_padraag REAL
 );
 `
 	_, err := s.DB.Exec(schema)
@@ -141,6 +160,48 @@ func (s *SQLiteStore) LogBrewingSession(data string) error {
 		return fmt.Errorf("log brewing session: %w", err)
 	}
 	return nil
+}
+
+func (s *SQLiteStore) GetPIDConfig(tank string) (*PIDConfig, error) {
+	var configJSON string
+	err := s.DB.Get(&configJSON, "SELECT config_json FROM equipment_config WHERE id = ?", tank)
+	if err != nil {
+		return nil, err
+	}
+	var config PIDConfig
+	if err := json.Unmarshal([]byte(configJSON), &config); err != nil {
+		return nil, err
+	}
+	return &config, nil
+}
+
+func (s *SQLiteStore) SavePIDConfig(tank string, config *PIDConfig) error {
+	data, err := json.Marshal(config)
+	if err != nil {
+		return err
+	}
+	_, err = s.DB.Exec("INSERT INTO equipment_config (id, config_json) VALUES (?, ?) ON CONFLICT(id) DO UPDATE SET config_json = excluded.config_json", tank, string(data))
+	return err
+}
+
+type HistoryEntry struct {
+	Timestamp  time.Time `db:"timestamp" json:"timestamp"`
+	MLTTemp    float64   `db:"mlt_temp" json:"mltTemp"`
+	BKTemp     float64   `db:"bk_temp" json:"bkTemp"`
+	MLTPadraag float64   `db:"mlt_padraag" json:"mltPadraag"`
+	BKPadraag  float64   `db:"bk_padraag" json:"bkPadraag"`
+}
+
+func (s *SQLiteStore) LogHistory(entry *HistoryEntry) error {
+	_, err := s.DB.Exec("INSERT INTO brewhouse_history (mlt_temp, bk_temp, mlt_padraag, bk_padraag) VALUES (?, ?, ?, ?)",
+		entry.MLTTemp, entry.BKTemp, entry.MLTPadraag, entry.BKPadraag)
+	return err
+}
+
+func (s *SQLiteStore) GetHistory(hours float64) ([]HistoryEntry, error) {
+	var history []HistoryEntry
+	err := s.DB.Select(&history, "SELECT * FROM brewhouse_history WHERE timestamp >= datetime('now', '-' || ? || ' hours') ORDER BY timestamp ASC", hours)
+	return history, err
 }
 
 func (s *SQLiteStore) Close() error {
