@@ -27,8 +27,8 @@ type MockFermentationStore struct {
 	GetStateByTankFunc          func(tankID string) (fermentation.FermentationState, error)
 	UpdateStateFunc             func(state fermentation.FermentationState) error
 	StopFermentationFunc        func(id int64) error
-	LogDataFunc                 func(planID int64, tankID string, batchID string, temp float32, target float32, valve bool, jacket bool) error
-	GetHistoryFunc              func(planID int64, hours float64) ([]fermentation.FermentationHistoryEntry, error)
+	LogDataFunc                 func(fermentationID int64, planID int64, tankID string, batchID string, temp float32, target float32, valve bool, jacket bool) error
+	GetHistoryFunc              func(fermentationID int64, hours float64) ([]fermentation.FermentationHistoryEntry, error)
 	LogGlycolDataFunc           func(temp float64, pressure *float64, load float64) error
 	GetGlycolHistoryFunc        func(hours float64) ([]fermentation.GlycolHistoryData, error)
 }
@@ -107,16 +107,16 @@ func (m *MockFermentationStore) StopFermentation(id int64) error {
 	return nil
 }
 
-func (m *MockFermentationStore) LogData(planID int64, tankID string, batchID string, temp float32, target float32, valve bool, jacket bool) error {
+func (m *MockFermentationStore) LogData(fermentationID int64, planID int64, tankID string, batchID string, temp float32, target float32, valve bool, jacket bool) error {
 	if m.LogDataFunc != nil {
-		return m.LogDataFunc(planID, tankID, batchID, temp, target, valve, jacket)
+		return m.LogDataFunc(fermentationID, planID, tankID, batchID, temp, target, valve, jacket)
 	}
 	return nil
 }
 
-func (m *MockFermentationStore) GetHistory(planID int64, hours float64) ([]fermentation.FermentationHistoryEntry, error) {
+func (m *MockFermentationStore) GetHistory(fermentationID int64, hours float64) ([]fermentation.FermentationHistoryEntry, error) {
 	if m.GetHistoryFunc != nil {
-		return m.GetHistoryFunc(planID, hours)
+		return m.GetHistoryFunc(fermentationID, hours)
 	}
 	return nil, nil
 }

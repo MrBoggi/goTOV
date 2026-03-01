@@ -296,7 +296,7 @@ func (s *Server) handleGetFermentationHistory(w http.ResponseWriter, r *http.Req
 
 	history, err := s.fermentationStore.GetHistory(id, hours)
 	if err != nil {
-		s.log.Error().Err(err).Int64("planID", id).Msg("failed to fetch fermentation history")
+		s.log.Error().Err(err).Int64("fermentationId", id).Msg("failed to fetch fermentation history")
 		http.Error(w, "failed to fetch history", http.StatusInternalServerError)
 		return
 	}

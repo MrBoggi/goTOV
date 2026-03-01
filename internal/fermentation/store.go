@@ -23,8 +23,8 @@ type FermentationStore interface {
 	GetStateByTank(tankID string) (FermentationState, error)
 	UpdateState(state FermentationState) error
 	StopFermentation(id int64) error
-	LogData(planID int64, tankID string, batchID string, temp float32, target float32, valve bool, jacket bool) error
-	GetHistory(planID int64, hours float64) ([]FermentationHistoryEntry, error)
+	LogData(fermentationID int64, planID int64, tankID string, batchID string, temp float32, target float32, valve bool, jacket bool) error
+	GetHistory(fermentationID int64, hours float64) ([]FermentationHistoryEntry, error)
 	LogGlycolData(temp float64, pressure *float64, load float64) error
 	GetGlycolHistory(hours float64) ([]GlycolHistoryData, error)
 	Clear() error
