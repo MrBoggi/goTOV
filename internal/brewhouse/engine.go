@@ -159,27 +159,6 @@ func (e *Engine) evaluate(ctx context.Context) {
 
 	// 3. Evaluate Logic
 
-	// Digital Valves
-	for _, valve := range e.state.Valves {
-		if valve.Mode == ModeAuto {
-			// Placeholder
-		}
-	}
-
-	// Pumps
-	for _, pump := range e.state.Pumps {
-		if pump.Mode == ModeAuto {
-			// Placeholder
-		}
-	}
-
-	// Analog Valve PV1
-	if e.state.ProportionalV != nil {
-		if e.state.ProportionalV.Mode == ModeAuto {
-			// Placeholder
-		}
-	}
-
 	// BK Heater with Safety Interlock
 	if e.state.Heater != nil {
 		if e.state.Heater.Mode == ModeAuto {
