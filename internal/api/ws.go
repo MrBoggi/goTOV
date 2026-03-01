@@ -173,6 +173,8 @@ func (s *Server) Router() http.Handler {
 	// Fixed: Let's use handleStopBrewing
 	r.Post("/api/brewing/stop", s.handleStopBrewing)
 	r.Get("/api/brewing/status", s.handleGetBrewingStatus)
+	r.Post("/api/brewing/config/pid", s.handleSavePIDConfig)
+	r.Get("/api/brewing/history", s.handleGetBrewingHistory)
 
 	// ----------------------------------------------------
 	// STATIC FILES (INGENTING annet fjernes eller endres)

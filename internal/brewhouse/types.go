@@ -31,7 +31,8 @@ type AnalogActuator struct {
 type BrewhouseState struct {
 	Valves        map[string]*DigitalActuator `json:"valves"`
 	Pumps         map[string]*DigitalActuator `json:"pumps"`
-	Heater        *AnalogActuator             `json:"heater"`
+	BKHeater      *AnalogActuator             `json:"bkHeater"`
+	MLTHeater     *AnalogActuator             `json:"mltHeater"`
 	ProportionalV *AnalogActuator             `json:"proportionalValve"`
 	Sensors       map[string]float64          `json:"sensors"`
 }
@@ -53,7 +54,8 @@ func InitialState() *BrewhouseState {
 			"Pump1": {Mode: ModeManual},
 			"Pump2": {Mode: ModeManual},
 		},
-		Heater:        &AnalogActuator{Mode: ModeManual},
+		BKHeater:      &AnalogActuator{Mode: ModeManual},
+		MLTHeater:     &AnalogActuator{Mode: ModeManual},
 		ProportionalV: &AnalogActuator{Mode: ModeManual},
 		Sensors:       make(map[string]float64),
 	}

@@ -244,9 +244,10 @@ func (s *Server) handleGetApiDocs(w http.ResponseWriter, r *http.Request) {
 			{"method": "GET", "path": "/api/fermentation/status", "description": "Get status of all active fermentations"},
 			{"method": "DELETE", "path": "/api/fermentation/plan/{id}", "description": "Delete a plan. Use ?force=true to stop active ones"},
 
-			// Brewhouse (New)
-			{"method": "GET", "path": "/api/brewhouse/state", "description": "Get complete brewhouse internal state (valves, pumps, heater, sensors)"},
-			{"method": "POST", "path": "/api/brewhouse/state", "description": "Update brewhouse state (change Modes, Setpoints, Commands)"},
+			// Brewing process (New)
+			{"method": "POST", "path": "/api/brewing/config/pid", "description": "Save PID configuration for a tank (BK/MLT)"},
+			{"method": "GET", "path": "/api/brewing/history", "description": "Get brewing history (BK/MLT temps and padraag)"},
+			{"method": "GET", "path": "/api/brewing/status", "description": "Get current brewing session status"},
 
 			// General/Infrastructure
 			{"method": "GET", "path": "/api/tags", "description": "Get snapshot of all current PLC tag values"},

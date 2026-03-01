@@ -3,9 +3,11 @@ package api
 import (
 	"encoding/json"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/MrBoggi/goTOV/internal/brew"
+	"github.com/MrBoggi/goTOV/internal/brewhouse"
 )
 
 type StartBrewingRequest struct {
@@ -116,4 +118,80 @@ func (s *Server) broadcastBrewingStatus() {
 
 		s.broadcast(msg)
 	}
+}
+
+type PIDConfigRequest struct {
+	Tank string  `json:"tank"`
+	SP   float64 `json:"sp"`
+	P    float64 `json:"p"`
+	I    float64 `json:"i"`
+	D    float64 `json:"d"`
+	Auto bool    `json:"auto"`
+}
+
+func (s *Server) handleSavePIDConfig(w http.ResponseWriter, r *http.Request) {
+	var req PIDConfigRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid request", http.StatusBadRequest)
+		return
+	}
+
+	config := &brewhouse.PIDConfig{
+		P: req.P,
+		I: req.I,
+		D: req.D,
+	}
+
+	if err := s.brewhouseStore.SavePIDConfig(req.Tank, config); err != nil {
+		s.log.Error().Err(err).Msg("Failed to save PID config")
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		return
+	}
+
+	// Update running engine state
+	state := s.brewhouseEngine.GetStateSnapshot()
+	if req.Tank == "BK" {
+		state.BKHeater.Setpoint = req.SP
+		state.BKHeater.PID = *config
+		if req.Auto {
+			state.BKHeater.Mode = brewhouse.ModeAuto
+		} else {
+			state.BKHeater.Mode = brewhouse.ModeManual
+		}
+	} else if req.Tank == "MLT" {
+		state.MLTHeater.Setpoint = req.SP
+		state.MLTHeater.PID = *config
+		if req.Auto {
+			state.MLTHeater.Mode = brewhouse.ModeAuto
+		} else {
+			state.MLTHeater.Mode = brewhouse.ModeManual
+		}
+	}
+
+	if err := s.brewhouseEngine.UpdateState(state); err != nil {
+		s.log.Error().Err(err).Msg("Failed to update brewhouse engine state")
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+}
+
+func (s *Server) handleGetBrewingHistory(w http.ResponseWriter, r *http.Request) {
+	hours := 24.0
+	if hStr := r.URL.Query().Get("hours"); hStr != "" {
+		if h, err := strconv.ParseFloat(hStr, 64); err == nil {
+			hours = h
+		}
+	}
+
+	history, err := s.brewhouseStore.GetHistory(hours)
+	if err != nil {
+		s.log.Error().Err(err).Msg("Failed to fetch brewing history")
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(history)
 }
