@@ -8,6 +8,8 @@ import (
 	"syscall"
 
 	"github.com/MrBoggi/goTOV/internal/api"
+	"github.com/MrBoggi/goTOV/internal/brew"
+	"github.com/MrBoggi/goTOV/internal/brewfather"
 	"github.com/MrBoggi/goTOV/internal/brewhouse"
 	"github.com/MrBoggi/goTOV/internal/config"
 	"github.com/MrBoggi/goTOV/internal/fermentation"
@@ -101,8 +103,18 @@ func RunServer(log zerolog.Logger) error {
 		defer brewhouseEngine.Stop()
 	}
 
+	// --- Brewing engine ---
+	brewingEngine := brew.NewEngine()
+
+	// --- Brewfather client for API proxy ---
+	var bfClient *brewfather.Client
+	if cfg.Brewfather.UserID != "" && cfg.Brewfather.APIKey != "" {
+		bfClient = brewfather.NewClient(cfg.Brewfather.UserID, cfg.Brewfather.APIKey)
+		log.Info().Msg("✅ Brewfather API client initialized")
+	}
+
 	// --- Start HTTP/WS API server ---
-	apiServer := api.NewServer(log, client, fermentationStore, engine, brewhouseStore, brewhouseEngine)
+	apiServer := api.NewServer(log, client, fermentationStore, engine, brewhouseStore, brewhouseEngine, brewingEngine, bfClient)
 	wg.Add(1)
 	go func() {
 		defer wg.Done()

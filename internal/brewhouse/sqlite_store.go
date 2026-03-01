@@ -13,6 +13,9 @@ import (
 type Store interface {
 	GetState() (*BrewhouseState, error)
 	SaveState(state *BrewhouseState) error
+	GetBrewingSession() (string, error)
+	SaveBrewingSession(data string) error
+	LogBrewingSession(data string) error
 	Close() error
 }
 
@@ -48,6 +51,17 @@ func (s *SQLiteStore) migrate() error {
 CREATE TABLE IF NOT EXISTS brewhouse_state (
     id INTEGER PRIMARY KEY CHECK (id = 1),
     state_json TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS brewing_sessions (
+    id INTEGER PRIMARY KEY CHECK (id = 1),
+    session_json TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS brewing_logs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    session_json TEXT NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 `
 	_, err := s.DB.Exec(schema)
@@ -100,6 +114,31 @@ func (s *SQLiteStore) SaveState(state *BrewhouseState) error {
 	_, err = s.DB.Exec("UPDATE brewhouse_state SET state_json = ? WHERE id = 1", string(data))
 	if err != nil {
 		return fmt.Errorf("update brewhouse state: %w", err)
+	}
+	return nil
+}
+
+func (s *SQLiteStore) GetBrewingSession() (string, error) {
+	var sessionJSON string
+	err := s.DB.Get(&sessionJSON, "SELECT session_json FROM brewing_sessions WHERE id = 1")
+	if err != nil {
+		return "", fmt.Errorf("get brewing session: %w", err)
+	}
+	return sessionJSON, nil
+}
+
+func (s *SQLiteStore) SaveBrewingSession(data string) error {
+	_, err := s.DB.Exec("INSERT INTO brewing_sessions (id, session_json) VALUES (1, ?) ON CONFLICT(id) DO UPDATE SET session_json = excluded.session_json", data)
+	if err != nil {
+		return fmt.Errorf("save brewing session: %w", err)
+	}
+	return nil
+}
+
+func (s *SQLiteStore) LogBrewingSession(data string) error {
+	_, err := s.DB.Exec("INSERT INTO brewing_logs (session_json) VALUES (?)", data)
+	if err != nil {
+		return fmt.Errorf("log brewing session: %w", err)
 	}
 	return nil
 }

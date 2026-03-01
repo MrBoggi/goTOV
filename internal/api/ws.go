@@ -8,6 +8,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/MrBoggi/goTOV/internal/brew"
+	"github.com/MrBoggi/goTOV/internal/brewfather"
 	"github.com/MrBoggi/goTOV/internal/brewhouse"
 	"github.com/MrBoggi/goTOV/internal/fermentation"
 	"github.com/MrBoggi/goTOV/internal/opcua"
@@ -25,6 +27,8 @@ type Server struct {
 	engine            *fermentation.Engine
 	brewhouseStore    brewhouse.Store
 	brewhouseEngine   *brewhouse.Engine
+	brewingEngine     *brew.Engine
+	brewfatherClient  *brewfather.Client
 
 	// Connected websocket clients
 	mu          sync.RWMutex
@@ -46,7 +50,7 @@ type WSMessage struct {
 }
 
 // NewServer initializes the WS/HTTP server and listens for OPC UA updates
-func NewServer(log zerolog.Logger, client *opcua.Client, fermentationStore fermentation.FermentationStore, engine *fermentation.Engine, brewhouseStore brewhouse.Store, brewhouseEngine *brewhouse.Engine) *Server {
+func NewServer(log zerolog.Logger, client *opcua.Client, fermentationStore fermentation.FermentationStore, engine *fermentation.Engine, brewhouseStore brewhouse.Store, brewhouseEngine *brewhouse.Engine, brewingEngine *brew.Engine, brewfatherClient *brewfather.Client) *Server {
 	s := &Server{
 		log:               log,
 		client:            client,
@@ -54,6 +58,8 @@ func NewServer(log zerolog.Logger, client *opcua.Client, fermentationStore ferme
 		engine:            engine,
 		brewhouseStore:    brewhouseStore,
 		brewhouseEngine:   brewhouseEngine,
+		brewingEngine:     brewingEngine,
+		brewfatherClient:  brewfatherClient,
 		subscribers:       make(map[*websocket.Conn]bool),
 		latest:            make(map[string]WSMessage),
 		upgrader: websocket.Upgrader{
@@ -69,6 +75,9 @@ func NewServer(log zerolog.Logger, client *opcua.Client, fermentationStore ferme
 	}
 	if s.brewhouseEngine != nil {
 		go s.broadcastBrewhouseState()
+	}
+	if s.brewingEngine != nil {
+		go s.broadcastBrewingStatus()
 	}
 	return s
 }
@@ -157,6 +166,13 @@ func (s *Server) Router() http.Handler {
 	r.Get("/api/glycol/status", s.handleGetGlycolStatus)
 	r.Get("/api/brewhouse/state", s.handleGetBrewhouseState)
 	r.Post("/api/brewhouse/state", s.handleUpdateBrewhouseState)
+
+	// Brewing process
+	r.Get("/api/brewfather/batches", s.handleListBrewfatherBatches)
+	r.Post("/api/brewing/start", s.handleStartBrewing)
+	// Fixed: Let's use handleStopBrewing
+	r.Post("/api/brewing/stop", s.handleStopBrewing)
+	r.Get("/api/brewing/status", s.handleGetBrewingStatus)
 
 	// ----------------------------------------------------
 	// STATIC FILES (INGENTING annet fjernes eller endres)

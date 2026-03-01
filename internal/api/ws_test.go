@@ -153,7 +153,7 @@ func (m *MockFermentationStore) Close() error { return nil }
 
 func TestHealthCheckEndpoint(t *testing.T) {
 	log := logger.New()
-	server := NewServer(log, nil, &MockFermentationStore{}, nil, nil, nil)
+	server := NewServer(log, nil, &MockFermentationStore{}, nil, nil, nil, nil, nil)
 
 	req, err := http.NewRequest("GET", "/health", nil)
 	assert.NoError(t, err)
@@ -179,7 +179,7 @@ func TestSaveFermentationPlanEndpoint(t *testing.T) {
 			return 42, nil
 		},
 	}
-	server := NewServer(log, nil, mockStore, nil, nil, nil)
+	server := NewServer(log, nil, mockStore, nil, nil, nil, nil, nil)
 
 	plan := fermentation.FermentationPlan{
 		Name:     "Test Plan",
@@ -227,7 +227,7 @@ func TestListFermentationPlansEndpoint(t *testing.T) {
 			return expectedPlans, nil
 		},
 	}
-	server := NewServer(log, nil, mockStore, nil, nil, nil)
+	server := NewServer(log, nil, mockStore, nil, nil, nil, nil, nil)
 
 	req, err := http.NewRequest("GET", "/api/fermentation/plans", nil)
 	assert.NoError(t, err)
@@ -254,7 +254,7 @@ func TestStartFermentationEndpoint(t *testing.T) {
 			return []fermentation.FermentationState{{ID: 789}}, nil
 		},
 	}
-	server := NewServer(log, nil, mockStore, nil, nil, nil)
+	server := NewServer(log, nil, mockStore, nil, nil, nil, nil, nil)
 
 	reqBody := StartFermentationRequest{
 		PlanID: 123,
@@ -275,7 +275,7 @@ func TestStartFermentationEndpoint(t *testing.T) {
 
 func TestListTanksEndpoint(t *testing.T) {
 	log := logger.New()
-	server := NewServer(log, nil, &MockFermentationStore{}, nil, nil, nil)
+	server := NewServer(log, nil, &MockFermentationStore{}, nil, nil, nil, nil, nil)
 
 	req, err := http.NewRequest("GET", "/api/tanks", nil)
 	assert.NoError(t, err)
@@ -302,7 +302,7 @@ func TestDeleteFermentationPlanEndpoint(t *testing.T) {
 				return nil
 			},
 		}
-		server := NewServer(log, nil, mockStore, nil, nil, nil)
+		server := NewServer(log, nil, mockStore, nil, nil, nil, nil, nil)
 		req, _ := http.NewRequest("DELETE", "/api/fermentation/plan/123", nil)
 		rr := httptest.NewRecorder()
 		server.Router().ServeHTTP(rr, req)
@@ -315,7 +315,7 @@ func TestDeleteFermentationPlanEndpoint(t *testing.T) {
 				return fermentation.ErrPlanInUse
 			},
 		}
-		server := NewServer(log, nil, mockStore, nil, nil, nil)
+		server := NewServer(log, nil, mockStore, nil, nil, nil, nil, nil)
 		req, _ := http.NewRequest("DELETE", "/api/fermentation/plan/123", nil)
 		rr := httptest.NewRecorder()
 		server.Router().ServeHTTP(rr, req)
@@ -328,7 +328,7 @@ func TestDeleteFermentationPlanEndpoint(t *testing.T) {
 				return fermentation.ErrPlanNotFound
 			},
 		}
-		server := NewServer(log, nil, mockStore, nil, nil, nil)
+		server := NewServer(log, nil, mockStore, nil, nil, nil, nil, nil)
 		req, _ := http.NewRequest("DELETE", "/api/fermentation/plan/999", nil)
 		rr := httptest.NewRecorder()
 		server.Router().ServeHTTP(rr, req)
@@ -336,7 +336,7 @@ func TestDeleteFermentationPlanEndpoint(t *testing.T) {
 	})
 
 	t.Run("Invalid ID Format", func(t *testing.T) {
-		server := NewServer(log, nil, &MockFermentationStore{}, nil, nil, nil)
+		server := NewServer(log, nil, &MockFermentationStore{}, nil, nil, nil, nil, nil)
 		req, _ := http.NewRequest("DELETE", "/api/fermentation/plan/abc", nil)
 		rr := httptest.NewRecorder()
 		server.Router().ServeHTTP(rr, req)

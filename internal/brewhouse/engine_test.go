@@ -9,7 +9,8 @@ import (
 )
 
 type mockStore struct {
-	state *BrewhouseState
+	state          *BrewhouseState
+	brewingSession string
 }
 
 func (m *mockStore) GetState() (*BrewhouseState, error) { return m.state, nil }
@@ -17,7 +18,13 @@ func (m *mockStore) SaveState(state *BrewhouseState) error {
 	m.state = state
 	return nil
 }
-func (m *mockStore) Close() error { return nil }
+func (m *mockStore) GetBrewingSession() (string, error) { return m.brewingSession, nil }
+func (m *mockStore) SaveBrewingSession(data string) error {
+	m.brewingSession = data
+	return nil
+}
+func (m *mockStore) LogBrewingSession(data string) error { return nil }
+func (m *mockStore) Close() error                        { return nil }
 
 func TestHeaterInterlock(t *testing.T) {
 	store := &mockStore{state: InitialState()}
