@@ -10,6 +10,22 @@ import (
 // 1) ENTRYPOINTS
 //
 
+// ExtractMashPlanFromBatch returns a list of mash steps from the batch.
+func ExtractMashPlanFromBatch(batch *BrewfatherBatch) ([]MashStep, error) {
+	if batch == nil {
+		return nil, fmt.Errorf("nil batch")
+	}
+	return batch.Recipe.Mash.Steps, nil
+}
+
+// ExtractBoilPlanFromBatch returns a list of boil steps from the batch.
+func ExtractBoilPlanFromBatch(batch *BrewfatherBatch) ([]BoilStep, error) {
+	if batch == nil {
+		return nil, fmt.Errorf("nil batch")
+	}
+	return batch.Recipe.Boil.Steps, nil
+}
+
 // ExtractFermentationPlan – legacy wrapper
 func ExtractFermentationPlan(recipe *BrewfatherRecipe) (*fermentation.FermentationPlan, error) {
 	return ExtractFermentationPlanFromRecipe(recipe)
