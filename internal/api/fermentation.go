@@ -234,16 +234,30 @@ func (s *Server) handleGetFermentationStatus(w http.ResponseWriter, r *http.Requ
 
 func (s *Server) handleGetApiDocs(w http.ResponseWriter, r *http.Request) {
 	docs := map[string]interface{}{
-		"title": "goTOV Fermentation API",
-		"endpoints": []map[string]string{
+		"title": "goTOV API Documentation",
+		"endpoints": []map[string]interface{}{
+			// Fermentation
 			{"method": "GET", "path": "/api/fermentation/plans", "description": "List all fermentation plans"},
 			{"method": "POST", "path": "/api/fermentation/plan", "description": "Save a new fermentation plan"},
-			{"method": "POST", "path": "/api/fermentation/start", "description": "Start a fermentation process (requires planID, tankID)"},
-			{"method": "POST", "path": "/api/fermentation/stop", "description": "Stop an active fermentation (requires tankID or id)"},
+			{"method": "POST", "path": "/api/fermentation/start", "description": "Start a fermentation (requires planId, tankId, batchId)"},
+			{"method": "POST", "path": "/api/fermentation/stop", "description": "Stop a fermentation (requires id or tankId)"},
 			{"method": "GET", "path": "/api/fermentation/status", "description": "Get status of all active fermentations"},
-			{"method": "GET", "path": "/api/fermentation/docs", "description": "This documentation"},
-			{"method": "DELETE", "path": "/api/fermentation/plan/{id}", "description": "Delete a fermentation plan. Use ?force=true to stop active fermentations first"},
-			{"method": "GET", "path": "/api/tanks", "description": "List available tanks"},
+			{"method": "DELETE", "path": "/api/fermentation/plan/{id}", "description": "Delete a plan. Use ?force=true to stop active ones"},
+
+			// Brewhouse (New)
+			{"method": "GET", "path": "/api/brewhouse/state", "description": "Get complete brewhouse internal state (valves, pumps, heater, sensors)"},
+			{"method": "POST", "path": "/api/brewhouse/state", "description": "Update brewhouse state (change Modes, Setpoints, Commands)"},
+
+			// General/Infrastructure
+			{"method": "GET", "path": "/api/tags", "description": "Get snapshot of all current PLC tag values"},
+			{"method": "POST", "path": "/api/write", "description": "Directly write to a PLC tag (requires tag and value)"},
+			{"method": "GET", "path": "/api/tanks", "description": "List available fermentation tanks"},
+			{"method": "GET", "path": "/api/glycol/status", "description": "Get current glycol unit load and temperature"},
+			{"method": "GET", "path": "/api/stream/tags", "description": "WebSocket endpoint for real-time updates (JSON messages)"},
+		},
+		"ws_topics": []map[string]string{
+			{"topic": "BREWHOUSE_STATE", "description": "Pushed every 1s with complete brewhouse state"},
+			{"topic": "any other tag", "description": "Pushed on change for monitored PLC tags"},
 		},
 	}
 
