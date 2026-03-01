@@ -13,11 +13,19 @@ type DigitalActuator struct {
 	State   bool         `json:"state"` // Actual state from OPC UA
 }
 
+type PIDConfig struct {
+	P float64 `json:"p"`
+	I float64 `json:"i"`
+	D float64 `json:"d"`
+}
+
 type AnalogActuator struct {
 	Mode     ActuatorMode `json:"mode"`
 	Setpoint float64      `json:"setpoint"`
 	Command  float64      `json:"command"` // Calculated/written command (0-100)
 	State    float64      `json:"state"`   // Actual from sensor
+	IsPID    bool         `json:"isPid"`
+	PID      PIDConfig    `json:"pid"`
 }
 
 type BrewhouseState struct {
