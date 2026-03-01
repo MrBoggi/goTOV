@@ -22,6 +22,7 @@ type Engine struct {
 	state *BrewhouseState
 
 	lastEvaluation time.Time
+	pids           map[string]*PIDController
 }
 
 func NewEngine(store Store, client *opcua.Client, log zerolog.Logger) *Engine {
@@ -30,6 +31,7 @@ func NewEngine(store Store, client *opcua.Client, log zerolog.Logger) *Engine {
 		client: client,
 		log:    log,
 		stop:   make(chan struct{}),
+		pids:   make(map[string]*PIDController),
 	}
 }
 
@@ -163,10 +165,35 @@ func (e *Engine) evaluate(ctx context.Context) {
 	if e.state.Heater != nil {
 		if e.state.Heater.Mode == ModeAuto {
 			currentTemp := e.state.Sensors["bkTemp"]
-			if currentTemp < e.state.Heater.Setpoint {
-				e.state.Heater.Command = 100.0
+			if e.state.Heater.IsPID {
+				// Use PID
+				pid, ok := e.pids["heater"]
+				if !ok {
+					pid = NewPIDController(e.state.Heater.PID.P, e.state.Heater.PID.I, e.state.Heater.PID.D, 0, 100)
+					e.pids["heater"] = pid
+				} else {
+					// Update coefficients in case they changed
+					pid.P = e.state.Heater.PID.P
+					pid.I = e.state.Heater.PID.I
+					pid.D = e.state.Heater.PID.D
+				}
+				e.state.Heater.Command = pid.Calculate(e.state.Heater.Setpoint, currentTemp, deltaSeconds)
 			} else {
-				e.state.Heater.Command = 0.0
+				// Fallback to Bang-Bang
+				if currentTemp < e.state.Heater.Setpoint {
+					e.state.Heater.Command = 100.0
+				} else {
+					e.state.Heater.Command = 0.0
+				}
+				// Reset PID state if it exists
+				if pid, ok := e.pids["heater"]; ok {
+					pid.Reset()
+				}
+			}
+		} else {
+			// Manual mode, reset PID
+			if pid, ok := e.pids["heater"]; ok {
+				pid.Reset()
 			}
 		}
 
@@ -177,6 +204,22 @@ func (e *Engine) evaluate(ctx context.Context) {
 				e.log.Warn().Float64("bkLevel", bkLevel).Msg("⚠️ BK Heater Interlock active: Level below 20L. Forcing heater OFF.")
 			}
 			e.state.Heater.Command = 0.0
+		}
+	}
+
+	// Proportional Valve PID (Optional/Generic)
+	if e.state.ProportionalV != nil {
+		if e.state.ProportionalV.Mode == ModeAuto && e.state.ProportionalV.IsPID {
+			// Note: We need a process value for the proportional valve if it's using PID.
+			// For now, let's assume it might be used for something like flow control or pressure.
+			// If no PV is defined specifically, we might need to skip or use a default.
+			// Since the user didn't specify the PV for the valve, I'll stick to the heater for now
+			// or implement a generic placeholder if needed.
+			// Given the current sensors, there isn't a clear generic PV for the proportional valve.
+		} else if e.state.ProportionalV.Mode == ModeManual {
+			if pid, ok := e.pids["proportionalValve"]; ok {
+				pid.Reset()
+			}
 		}
 	}
 }

@@ -95,3 +95,45 @@ func TestLevelCalculation(t *testing.T) {
 		t.Errorf("Expected level around 12.0, got %f", level)
 	}
 }
+func TestHeaterPID(t *testing.T) {
+	store := &mockStore{state: InitialState()}
+	engine := NewEngine(store, nil, zerolog.Nop())
+	engine.state = InitialState()
+	engine.lastEvaluation = time.Now().Add(-1 * time.Second)
+
+	// Set heater to Auto and PID mode
+	engine.state.Heater.Mode = ModeAuto
+	engine.state.Heater.IsPID = true
+	engine.state.Heater.Setpoint = 50.0
+	engine.state.Heater.PID = PIDConfig{P: 1.0, I: 0.1, D: 0.01}
+	engine.state.Sensors["bkLevel"] = 25.0 // Safe level
+	engine.state.Sensors["bkTemp"] = 40.0  // 10 degrees error
+
+	// First evaluation
+	engine.evaluateAndWrite(context.Background())
+
+	// Command should be > 0 (Proportional alone is 10.0)
+	if engine.state.Heater.Command <= 0 {
+		t.Errorf("Expected heater command to be > 0, got %f", engine.state.Heater.Command)
+	}
+
+	cmd1 := engine.state.Heater.Command
+
+	// Wait a bit and evaluate again
+	engine.lastEvaluation = time.Now().Add(-1 * time.Second)
+	engine.evaluateAndWrite(context.Background())
+
+	// Command should change (Integral should increase)
+	cmd2 := engine.state.Heater.Command
+	if cmd2 <= cmd1 {
+		t.Errorf("Expected heater command to increase due to integral term, got %f (prev %f)", cmd2, cmd1)
+	}
+
+	// Test disabling PID
+	engine.state.Heater.IsPID = false
+	engine.evaluateAndWrite(context.Background())
+	// Should fallback to Bang-Bang: 40 < 50 -> 100%
+	if engine.state.Heater.Command != 100.0 {
+		t.Errorf("Expected bang-bang 100%%, got %f", engine.state.Heater.Command)
+	}
+}
