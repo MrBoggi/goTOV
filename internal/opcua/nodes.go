@@ -22,6 +22,23 @@ func (c *Client) ListSymbols(ctx context.Context) ([]*ua.NodeID, error) {
 		"MAIN.fbUA.fermenter1Varmekappe",
 		"MAIN.fbUA.fermenter2Varmekappe",
 		"MAIN.fbUA.glykolkjolerPumpe",
+
+		// Brewhouse Sensors
+		"MAIN.fbUA.bkTemp",
+		"MAIN.fbUA.mltPH",
+		"MAIN.fbUA.mltLevel",
+		"MAIN.fbUA.bkLevel",
+		"MAIN.fbUA.flowHLT",
+		"MAIN.fbUA.flowMLT",
+
+		// Brewhouse Digital Valves & Pumps (Expected)
+		"MAIN.fbUA.V1_State", "MAIN.fbUA.V2_State", "MAIN.fbUA.V3_State",
+		"MAIN.fbUA.V4_State", "MAIN.fbUA.V5_State", "MAIN.fbUA.V6_State",
+		"MAIN.fbUA.V7_State", "MAIN.fbUA.V8_State", "MAIN.fbUA.V9_State",
+		"MAIN.fbUA.Pump1_State", "MAIN.fbUA.Pump2_State",
+
+		// Brewhouse Analog Actuators (Expected)
+		"MAIN.fbUA.PV1_State", "MAIN.fbUA.BK_Heater_State",
 	}
 
 	var nodes []*ua.NodeID

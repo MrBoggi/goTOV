@@ -35,6 +35,12 @@ type FermentationConfig struct {
 	DatabasePath string `mapstructure:"database_path"`
 }
 
+// BrewhouseConfig - oppsett for bryggeprosessen
+type BrewhouseConfig struct {
+	Enabled      bool   `mapstructure:"enabled"`
+	DatabasePath string `mapstructure:"database_path"`
+}
+
 // BrewfatherConfig – API-nøklene.
 type BrewfatherConfig struct {
 	UserID string `mapstructure:"user_id"`
@@ -51,6 +57,7 @@ type Config struct {
 	OPCUA        OPCUAConfig        `mapstructure:"opcua"`
 	Logging      LoggingConfig      `mapstructure:"logging"`
 	Fermentation FermentationConfig `mapstructure:"fermentation"`
+	Brewhouse    BrewhouseConfig    `mapstructure:"brewhouse"`
 	Brewfather   BrewfatherConfig   `mapstructure:"brewfather"`
 	Server       ServerConfig       `mapstructure:"server"`
 }
@@ -69,6 +76,8 @@ func Load(path string) (*Config, error) {
 	v.SetDefault("fermentation.hysteresis.heating", 0.3)
 	v.SetDefault("fermentation.step_check_interval", "30s")
 	v.SetDefault("fermentation.stabilization_time", "10m")
+	v.SetDefault("brewhouse.enabled", true)
+	v.SetDefault("brewhouse.database_path", "data/brewhouse.db")
 
 	// 2. Konfigurer lesing fra fil
 	if path != "" {

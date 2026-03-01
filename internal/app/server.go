@@ -8,6 +8,7 @@ import (
 	"syscall"
 
 	"github.com/MrBoggi/goTOV/internal/api"
+	"github.com/MrBoggi/goTOV/internal/brewhouse"
 	"github.com/MrBoggi/goTOV/internal/config"
 	"github.com/MrBoggi/goTOV/internal/fermentation"
 	"github.com/MrBoggi/goTOV/internal/opcua"
@@ -80,8 +81,28 @@ func RunServer(log zerolog.Logger) error {
 	engine.Start()
 	defer engine.Stop()
 
+	// --- Brewhouse start ---
+	var brewhouseStore brewhouse.Store
+	var brewhouseEngine *brewhouse.Engine
+	if cfg.Brewhouse.Enabled {
+		bs, err := brewhouse.NewSQLiteStore(cfg.Brewhouse.DatabasePath)
+		if err != nil {
+			log.Error().Err(err).Msg("❌ Failed to create brewhouse store")
+			return err
+		}
+		defer func() {
+			_ = bs.Close()
+			log.Info().Msg("📂 Brewhouse store closed")
+		}()
+		brewhouseStore = bs
+
+		brewhouseEngine = brewhouse.NewEngine(brewhouseStore, client, log)
+		brewhouseEngine.Start()
+		defer brewhouseEngine.Stop()
+	}
+
 	// --- Start HTTP/WS API server ---
-	apiServer := api.NewServer(log, client, fermentationStore, engine)
+	apiServer := api.NewServer(log, client, fermentationStore, engine, brewhouseStore, brewhouseEngine)
 	wg.Add(1)
 	go func() {
 		defer wg.Done()

@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/MrBoggi/goTOV/internal/brewhouse"
 	"github.com/MrBoggi/goTOV/internal/fermentation"
 	"github.com/MrBoggi/goTOV/internal/opcua"
 	"github.com/MrBoggi/goTOV/internal/version"
@@ -22,6 +23,8 @@ type Server struct {
 	client            *opcua.Client
 	fermentationStore fermentation.FermentationStore
 	engine            *fermentation.Engine
+	brewhouseStore    brewhouse.Store
+	brewhouseEngine   *brewhouse.Engine
 
 	// Connected websocket clients
 	mu          sync.RWMutex
@@ -43,12 +46,14 @@ type WSMessage struct {
 }
 
 // NewServer initializes the WS/HTTP server and listens for OPC UA updates
-func NewServer(log zerolog.Logger, client *opcua.Client, fermentationStore fermentation.FermentationStore, engine *fermentation.Engine) *Server {
+func NewServer(log zerolog.Logger, client *opcua.Client, fermentationStore fermentation.FermentationStore, engine *fermentation.Engine, brewhouseStore brewhouse.Store, brewhouseEngine *brewhouse.Engine) *Server {
 	s := &Server{
 		log:               log,
 		client:            client,
 		fermentationStore: fermentationStore,
 		engine:            engine,
+		brewhouseStore:    brewhouseStore,
+		brewhouseEngine:   brewhouseEngine,
 		subscribers:       make(map[*websocket.Conn]bool),
 		latest:            make(map[string]WSMessage),
 		upgrader: websocket.Upgrader{
@@ -61,6 +66,9 @@ func NewServer(log zerolog.Logger, client *opcua.Client, fermentationStore ferme
 	if s.client != nil {
 		go s.consumeUpdates()
 		go s.seedCache()
+	}
+	if s.brewhouseEngine != nil {
+		go s.broadcastBrewhouseState()
 	}
 	return s
 }
@@ -143,9 +151,12 @@ func (s *Server) Router() http.Handler {
 	r.Get("/api/fermentation/status", s.handleGetFermentationStatus)
 	r.Get("/api/fermentation/history/{id}", s.handleGetFermentationHistory)
 	r.Get("/api/fermentation/docs", s.handleGetApiDocs)
+	r.Get("/api/docs", s.handleGetApiDocs)
 	r.Delete("/api/fermentation/plan/{id}", s.handleDeleteFermentationPlan)
 	r.Get("/api/tanks", s.handleListTanks)
 	r.Get("/api/glycol/status", s.handleGetGlycolStatus)
+	r.Get("/api/brewhouse/state", s.handleGetBrewhouseState)
+	r.Post("/api/brewhouse/state", s.handleUpdateBrewhouseState)
 
 	// ----------------------------------------------------
 	// STATIC FILES (INGENTING annet fjernes eller endres)
