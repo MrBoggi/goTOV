@@ -34,9 +34,10 @@ func NewClient(endpoint, username, password string, log zerolog.Logger) (*Client
 	if strings.Contains(endpoint, "<ip_or_hostname>") {
 		return nil, fmt.Errorf("OPC UA endpoint is not configured: found placeholder '<ip_or_hostname>'. Please update your configuration (e.g., config.yaml or GOTOV_OPCUA_ENDPOINT) with the correct server address")
 	}
-	ctx := context.Background()
+	// --- Discover endpoints with timeout ---
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
 
-	// --- Discover endpoints ---
 	endpoints, err := opcua.GetEndpoints(ctx, endpoint)
 	if err != nil {
 		return nil, fmt.Errorf("get endpoints: %w", err)
@@ -90,10 +91,14 @@ func NewClient(endpoint, username, password string, log zerolog.Logger) (*Client
 	}, nil
 }
 
-// Connect establishes the OPC UA session.
+// Connect establishes the OPC UA session with a timeout.
 func (c *Client) Connect() error {
 	c.log.Info().Msg("Connecting to OPC UA server...")
-	if err := c.conn.Connect(context.Background()); err != nil {
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	if err := c.conn.Connect(ctx); err != nil {
 		return fmt.Errorf("connect failed: %w", err)
 	}
 	c.log.Info().Msg("✅ Connected to OPC UA server")

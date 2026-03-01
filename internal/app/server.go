@@ -6,6 +6,7 @@ import (
 	"os/signal"
 	"sync"
 	"syscall"
+	"time"
 
 	"github.com/MrBoggi/goTOV/internal/api"
 	"github.com/MrBoggi/goTOV/internal/brew"
@@ -46,23 +47,9 @@ func RunServer(log zerolog.Logger) error {
 		log.Info().Msg("🔌 OPC UA client closed")
 	}()
 
-	if err := client.Connect(); err != nil {
-		log.Error().Err(err).Msg("❌ Failed to connect to OPC UA server")
-		return err
-	}
-	log.Info().Msg("✅ Connected to Beckhoff PLC via OPC UA")
-
 	// --- Context for subs ---
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-
-	// --- List symbols / nodes ---
-	nodes, err := client.ListSymbols(ctx)
-	if err != nil {
-		log.Error().Err(err).Msg("❌ Failed to list PLC symbols")
-		return err
-	}
-	log.Info().Msgf("🧭 Found %d symbols manually", len(nodes))
 
 	// --- Waitgroup for graceful shutdown ---
 	var wg sync.WaitGroup
@@ -114,6 +101,7 @@ func RunServer(log zerolog.Logger) error {
 	}
 
 	// --- Start HTTP/WS API server ---
+	// Vi starter denne FØR vi kobler til PLS slik at frontenden alltid kan laste.
 	apiServer := api.NewServer(log, client, fermentationStore, engine, brewhouseStore, brewhouseEngine, brewingEngine, bfClient)
 	wg.Add(1)
 	go func() {
@@ -124,13 +112,45 @@ func RunServer(log zerolog.Logger) error {
 		}
 	}()
 
-	// --- Start subscription ---
+	// --- Start OPC UA connection and subscription in background ---
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		if err := client.SubscribeAll(ctx, nodes); err != nil {
-			log.Error().Err(err).Msg("❌ Subscription failed")
-			cancel()
+
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			default:
+			}
+
+			log.Info().Msg("🔌 Attempting to connect to OPC UA server...")
+			if err := client.Connect(); err != nil {
+				log.Warn().Err(err).Msg("⚠️ Failed to connect to OPC UA server, retrying in 5s...")
+				time.Sleep(5 * time.Second)
+				continue
+			}
+			log.Info().Msg("✅ Connected to Beckhoff PLC via OPC UA")
+
+			// --- List symbols / nodes ---
+			nodes, err := client.ListSymbols(ctx)
+			if err != nil {
+				log.Error().Err(err).Msg("❌ Failed to list PLC symbols, retrying...")
+				_ = client.Close()
+				time.Sleep(5 * time.Second)
+				continue
+			}
+			log.Info().Msgf("🧭 Found %d symbols manually", len(nodes))
+
+			// --- Start subscription ---
+			// SubscribeAll blokkerer til context kanselleres eller tilkobling feiler
+			if err := client.SubscribeAll(ctx, nodes); err != nil {
+				log.Error().Err(err).Msg("❌ Subscription failed or connection lost, retrying in 5s...")
+				_ = client.Close()
+				time.Sleep(5 * time.Second)
+				continue
+			}
+			return // Normal exit when ctx cancelled
 		}
 	}()
 
