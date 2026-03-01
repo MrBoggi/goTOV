@@ -455,7 +455,7 @@ func (e *Engine) processOne(state *FermentationState) (bool, error) {
 		coolingActive = cooling
 
 		// Log to history
-		if err := e.store.LogData(state.PlanID, state.TankID, state.BatchID, currentTemp, target, cooling, heating); err != nil {
+		if err := e.store.LogData(state.ID, state.PlanID, state.TankID, state.BatchID, currentTemp, target, cooling, heating); err != nil {
 			e.log.Error().Err(err).Msg("failed to log fermentation history")
 		}
 	}

@@ -78,6 +78,7 @@ CREATE TABLE IF NOT EXISTS fermentation_states (
 
 CREATE TABLE IF NOT EXISTS fermentation_history (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
+    fermentation_id INTEGER NOT NULL DEFAULT 0,
     plan_id INTEGER NOT NULL,
     tank_id TEXT NOT NULL,
     batch_id TEXT NOT NULL,
@@ -136,6 +137,15 @@ CREATE TABLE IF NOT EXISTS glycol_history (
 		_, err = s.DB.Exec("ALTER TABLE fermentation_states DROP COLUMN tank_no")
 		if err != nil {
 			return fmt.Errorf("failed to drop legacy tank_no column: %w", err)
+		}
+	}
+
+	// Check for fermentation_id column in fermentation_history
+	err = s.DB.Get(&count, "SELECT count(*) FROM pragma_table_info('fermentation_history') WHERE name='fermentation_id'")
+	if err == nil && count == 0 {
+		_, err = s.DB.Exec("ALTER TABLE fermentation_history ADD COLUMN fermentation_id INTEGER NOT NULL DEFAULT 0")
+		if err != nil {
+			return fmt.Errorf("failed to add fermentation_id column to history: %w", err)
 		}
 	}
 
@@ -272,25 +282,25 @@ WHERE id = :id`,
 	return err
 }
 
-func (s *SQLiteStore) LogData(planID int64, tankID string, batchID string, temp float32, target float32, valve bool, jacket bool) error {
+func (s *SQLiteStore) LogData(fermentationID int64, planID int64, tankID string, batchID string, temp float32, target float32, valve bool, jacket bool) error {
 	_, err := s.DB.Exec(`
 INSERT INTO fermentation_history 
-(plan_id, tank_id, batch_id, temperature, target_temp, cooling_valve, heating_jacket)
-VALUES (?, ?, ?, ?, ?, ?, ?)`,
-		planID, tankID, batchID, temp, target, valve, jacket)
+(fermentation_id, plan_id, tank_id, batch_id, temperature, target_temp, cooling_valve, heating_jacket)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+		fermentationID, planID, tankID, batchID, temp, target, valve, jacket)
 	return err
 }
 
-func (s *SQLiteStore) GetHistory(planID int64, hours float64) ([]FermentationHistoryEntry, error) {
+func (s *SQLiteStore) GetHistory(fermentationID int64, hours float64) ([]FermentationHistoryEntry, error) {
 	var history []FermentationHistoryEntry
 	query := `
 		SELECT timestamp, temperature, target_temp, cooling_valve, heating_jacket 
 		FROM fermentation_history 
-		WHERE plan_id = ? 
+		WHERE fermentation_id = ? 
 		AND datetime(timestamp) >= datetime('now', '-' || ? || ' hours')
 		ORDER BY timestamp ASC`
 
-	err := s.DB.Select(&history, query, planID, hours)
+	err := s.DB.Select(&history, query, fermentationID, hours)
 	return history, err
 }
 
