@@ -137,6 +137,7 @@ In case of issues after merge:
 - **Commit Frequency**: Commit early and often, but ensure each commit is atomic
 - **Branch Naming**: `(feature|bugfix|hotfix|docs|chore)/<ticket-id>-<brief-description>`
 - **PR Size**: Keep PRs under 400 lines for effective review
+- **PR Isolation (CRITICAL)**: Never reuse a branch or PR that has been merged or closed. Always start from a fresh `development` branch for every new task/fix.
 - **Review Response**: Address review comments within 24 hours
 - **Merge Strategy**: Squash for feature branches, merge for release branches
 - **Sign-Off**: Require at least 2 approvals for main branch changes

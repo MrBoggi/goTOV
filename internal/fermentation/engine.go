@@ -28,6 +28,7 @@ type Engine struct {
 	pumpAccumulatedTime time.Duration
 	lastGlycolLogTime   time.Time
 	currentGlycolLoad   float64
+	lastWritten         map[string]interface{}
 }
 
 func NewEngine(store FermentationStore, client *opcua.Client, log zerolog.Logger) *Engine {
@@ -38,6 +39,7 @@ func NewEngine(store FermentationStore, client *opcua.Client, log zerolog.Logger
 		stop:              make(chan struct{}),
 		active:            make(map[int64]*FermentationState),
 		lastGlycolLogTime: time.Now(),
+		lastWritten:       make(map[string]interface{}),
 	}
 }
 
@@ -216,13 +218,20 @@ func (e *Engine) processAll() {
 		}
 	}
 
-	// 5. Glycol Pump Interlock: Only run if at least one valve is open
+	// 5. Glycol Pump Interlock: Only run if state changed
 	if e.client != nil {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
-		err := e.client.WriteTag(ctx, "ns=4;s=MAIN.fbUA.glykolkjolerPumpe", anyCooling)
-		if err != nil {
-			e.log.Error().Err(err).Msg("failed to sync glycol pump")
+
+		pumpTag := "ns=4;s=MAIN.fbUA.glykolkjolerPumpe"
+		last, ok := e.lastWritten[pumpTag]
+		if !ok || last != anyCooling {
+			err := e.client.WriteTag(ctx, pumpTag, anyCooling)
+			if err != nil {
+				e.log.Error().Err(err).Msg("failed to sync glycol pump")
+			} else {
+				e.lastWritten[pumpTag] = anyCooling
+			}
 		}
 	}
 
@@ -483,10 +492,23 @@ func (e *Engine) setTankHardware(tankID string, cooling bool, heating bool) {
 		e.log.Debug().Str("tag", jacketTag).Interface("value", val).Msgf("🔎 Tag type diagnostic: %T", val)
 	}
 
-	if err := e.client.WriteTag(ctx, valveTag, cooling); err != nil {
-		e.log.Error().Err(err).Str("tag", valveTag).Msg("❌ Failed to write cooling valve")
+	// Change-only write for Valve
+	lastValve, okV := e.lastWritten[valveTag]
+	if !okV || lastValve != cooling {
+		if err := e.client.WriteTag(ctx, valveTag, cooling); err == nil {
+			e.lastWritten[valveTag] = cooling
+		} else {
+			e.log.Error().Err(err).Str("tag", valveTag).Msg("❌ Failed to write cooling valve")
+		}
 	}
-	if err := e.client.WriteTag(ctx, jacketTag, heating); err != nil {
-		e.log.Error().Err(err).Str("tag", jacketTag).Msg("❌ Failed to write heating jacket")
+
+	// Change-only write for Jacket
+	lastJacket, okJ := e.lastWritten[jacketTag]
+	if !okJ || lastJacket != heating {
+		if err := e.client.WriteTag(ctx, jacketTag, heating); err == nil {
+			e.lastWritten[jacketTag] = heating
+		} else {
+			e.log.Error().Err(err).Str("tag", jacketTag).Msg("❌ Failed to write heating jacket")
+		}
 	}
 }
