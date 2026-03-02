@@ -85,6 +85,7 @@ func (c *Client) ListSymbols(ctx context.Context) ([]*ua.NodeID, error) {
 			}
 		} else {
 			c.SetDisplayName(id.String(), s)
+
 		}
 
 		nodes = append(nodes, id)

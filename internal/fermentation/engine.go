@@ -192,6 +192,11 @@ func (e *Engine) run() {
 }
 
 func (e *Engine) processAll() {
+	if e.client != nil && !e.client.IsConnected() {
+		// Silently skip if PLC is offline to avoid log spam
+		return
+	}
+
 	e.mu.RLock()
 	var toProcess []*FermentationState
 	for _, state := range e.active {
@@ -258,7 +263,7 @@ func (e *Engine) logGlycol() {
 		return
 	}
 
-	if e.client == nil {
+	if e.client == nil || !e.client.IsConnected() {
 		return
 	}
 

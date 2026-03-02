@@ -20,6 +20,13 @@ import (
 	"github.com/rs/zerolog"
 )
 
+// Client represents a connected websocket client
+type Client struct {
+	server *Server
+	conn   *websocket.Conn
+	send   chan WSMessage
+}
+
 type Server struct {
 	log               zerolog.Logger
 	client            *opcua.Client
@@ -30,9 +37,11 @@ type Server struct {
 	brewingEngine     *brew.Engine
 	brewfatherClient  *brewfather.Client
 
-	// Connected websocket clients
-	mu          sync.RWMutex
-	subscribers map[*websocket.Conn]bool
+	// Hub logic
+	clients      map[*Client]bool
+	broadcastCh  chan WSMessage
+	registerCh   chan *Client
+	unregisterCh chan *Client
 
 	// Latest known values for REST snapshot
 	latestMu sync.RWMutex
@@ -60,7 +69,10 @@ func NewServer(log zerolog.Logger, client *opcua.Client, fermentationStore ferme
 		brewhouseEngine:   brewhouseEngine,
 		brewingEngine:     brewingEngine,
 		brewfatherClient:  brewfatherClient,
-		subscribers:       make(map[*websocket.Conn]bool),
+		clients:           make(map[*Client]bool),
+		broadcastCh:       make(chan WSMessage, 256),
+		registerCh:        make(chan *Client),
+		unregisterCh:      make(chan *Client),
 		latest:            make(map[string]WSMessage),
 		upgrader: websocket.Upgrader{
 			ReadBufferSize:  1024,
@@ -68,6 +80,8 @@ func NewServer(log zerolog.Logger, client *opcua.Client, fermentationStore ferme
 			CheckOrigin:     func(r *http.Request) bool { return true },
 		},
 	}
+
+	go s.runHub()
 
 	if s.client != nil {
 		go s.consumeUpdates()
@@ -82,9 +96,50 @@ func NewServer(log zerolog.Logger, client *opcua.Client, fermentationStore ferme
 	return s
 }
 
+func (s *Server) runHub() {
+	for {
+		select {
+		case client := <-s.registerCh:
+			s.clients[client] = true
+			s.log.Info().Int("count", len(s.clients)).Msg("💬 WS client connected")
+
+			// Send initial snapshot
+			s.latestMu.RLock()
+			for _, msg := range s.latest {
+				client.send <- msg
+			}
+			s.latestMu.RUnlock()
+
+		case client := <-s.unregisterCh:
+			if _, ok := s.clients[client]; ok {
+				delete(s.clients, client)
+				close(client.send)
+				s.log.Info().Int("count", len(s.clients)).Msg("🧹 WS client disconnected")
+			}
+
+		case message := <-s.broadcastCh:
+			for client := range s.clients {
+				select {
+				case client.send <- message:
+				default:
+					s.log.Warn().Msg("❌ WS client outbox full - dropping client")
+					close(client.send)
+					delete(s.clients, client)
+				}
+			}
+		}
+	}
+}
+
 func (s *Server) seedCache() {
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second) // Increased timeout
 	defer cancel()
+
+	s.log.Info().Msg("🌱 Waiting for OPC UA connection before seeding cache...")
+	if err := s.client.WaitForConnection(ctx); err != nil {
+		s.log.Error().Err(err).Msg("❌ Timeout waiting for OPC UA connection, skipping seed")
+		return
+	}
 
 	s.log.Info().Msg("🌱 Seeding WebSocket cache from PLC...")
 
@@ -200,19 +255,18 @@ func (s *Server) handleWS(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	s.mu.Lock()
-	s.subscribers[conn] = true
-	s.mu.Unlock()
+	client := &Client{
+		server: s,
+		conn:   conn,
+		send:   make(chan WSMessage, 256),
+	}
+	s.registerCh <- client
 	s.log.Info().Str("remote", conn.RemoteAddr().String()).Msg("💬 WS client connected")
 
-	// Send initial snapshot
-	s.latestMu.RLock()
-	for _, msg := range s.latest {
-		_ = conn.WriteJSON(msg)
-	}
-	s.latestMu.RUnlock()
+	// Start write pump in a separate goroutine
+	go client.writePump()
 
-	// Setup ping handler
+	// Read loop (to detect disconnection and handle pongs)
 	conn.SetReadLimit(1024)
 	_ = conn.SetReadDeadline(time.Now().Add(60 * time.Second))
 	conn.SetPongHandler(func(string) error {
@@ -220,29 +274,43 @@ func (s *Server) handleWS(w http.ResponseWriter, r *http.Request) {
 		return nil
 	})
 
-	go s.keepAlive(conn)
-
-	// Block until client closes
 	for {
 		if _, _, err := conn.ReadMessage(); err != nil {
 			break
 		}
 	}
 
-	// Remove client
-	s.mu.Lock()
-	delete(s.subscribers, conn)
-	s.mu.Unlock()
+	s.unregisterCh <- client
 	_ = conn.Close()
-	s.log.Info().Msg("🧹 WS client disconnected")
 }
 
-func (s *Server) keepAlive(conn *websocket.Conn) {
+func (client *Client) writePump() {
 	ticker := time.NewTicker(30 * time.Second)
-	defer ticker.Stop()
-	for range ticker.C {
-		if err := conn.WriteControl(websocket.PingMessage, []byte("ping"), time.Now().Add(5*time.Second)); err != nil {
-			return
+	defer func() {
+		ticker.Stop()
+		_ = client.conn.Close()
+	}()
+
+	for {
+		select {
+		case message, ok := <-client.send:
+			_ = client.conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
+			if !ok {
+				// The hub closed the channel
+				_ = client.conn.WriteMessage(websocket.CloseMessage, []byte{})
+				return
+			}
+
+			if err := client.conn.WriteJSON(message); err != nil {
+				client.server.log.Warn().Err(err).Msg("❌ WS write failed")
+				return
+			}
+
+		case <-ticker.C:
+			_ = client.conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
+			if err := client.conn.WriteMessage(websocket.PingMessage, nil); err != nil {
+				return
+			}
 		}
 	}
 }
@@ -262,33 +330,23 @@ func (s *Server) consumeUpdates() {
 			Tag:         ev.Name,
 			Value:       ev.Value,
 			ValueType:   ev.Type,
-			DisplayName: ev.DisplayName, // 👈 legg til dette
+			DisplayName: ev.DisplayName,
 			Timestamp:   time.Now().UnixMilli(),
 		}
 
-		// oppdater cache
+		// update cache
 		s.latestMu.Lock()
 		s.latest[ev.Name] = msg
 		s.latestMu.Unlock()
 
-		s.broadcast(msg)
+		s.broadcastMessage(msg)
 	}
 }
 
-func (s *Server) broadcast(msg WSMessage) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
+func (s *Server) broadcastMessage(msg WSMessage) {
+	s.broadcastCh <- msg
+}
 
-	for conn := range s.subscribers {
-		_ = conn.SetWriteDeadline(time.Now().Add(2 * time.Second))
-		if err := conn.WriteJSON(msg); err != nil {
-			s.mu.RUnlock()
-			s.mu.Lock()
-			delete(s.subscribers, conn)
-			s.mu.Unlock()
-			s.mu.RLock()
-			_ = conn.Close()
-			s.log.Warn().Err(err).Msg("❌ WS write failed — client removed")
-		}
-	}
+func (s *Server) broadcast(msg WSMessage) {
+	s.broadcastMessage(msg)
 }

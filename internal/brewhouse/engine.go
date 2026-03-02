@@ -137,6 +137,11 @@ func (e *Engine) run() {
 }
 
 func (e *Engine) evaluateAndWrite(ctx context.Context) {
+	if e.client != nil && !e.client.IsConnected() {
+		// Skip evaluation if PLC is offline
+		return
+	}
+
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
