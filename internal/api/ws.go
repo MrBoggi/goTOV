@@ -132,8 +132,14 @@ func (s *Server) runHub() {
 }
 
 func (s *Server) seedCache() {
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second) // Increased timeout
 	defer cancel()
+
+	s.log.Info().Msg("🌱 Waiting for OPC UA connection before seeding cache...")
+	if err := s.client.WaitForConnection(ctx); err != nil {
+		s.log.Error().Err(err).Msg("❌ Timeout waiting for OPC UA connection, skipping seed")
+		return
+	}
 
 	s.log.Info().Msg("🌱 Seeding WebSocket cache from PLC...")
 
