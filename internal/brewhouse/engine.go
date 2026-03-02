@@ -18,21 +18,23 @@ type Engine struct {
 	stop chan struct{}
 	wg   sync.WaitGroup
 
-	mu    sync.RWMutex
-	state *BrewhouseState
-
 	lastEvaluation time.Time
 	lastHistoryLog time.Time
-	pids           map[string]*PIDController
+	mu             sync.RWMutex
+	state          *BrewhouseState
+
+	pids        map[string]*PIDController
+	lastWritten map[string]interface{}
 }
 
 func NewEngine(store Store, client *opcua.Client, log zerolog.Logger) *Engine {
 	return &Engine{
-		store:  store,
-		client: client,
-		log:    log,
-		stop:   make(chan struct{}),
-		pids:   make(map[string]*PIDController),
+		store:       store,
+		client:      client,
+		log:         log,
+		stop:        make(chan struct{}),
+		pids:        make(map[string]*PIDController),
+		lastWritten: make(map[string]interface{}),
 	}
 }
 
@@ -315,26 +317,60 @@ func (e *Engine) evaluate(ctx context.Context) {
 func (e *Engine) writeToUA(ctx context.Context) {
 	// Digital Valves
 	for name, valve := range e.state.Valves {
-		tag := fmt.Sprintf("ns=4;s=MAIN.fbUA.%s", name) // Key is now the exact tag name
-		_ = e.client.WriteTag(ctx, tag, valve.Command)
+		tag := fmt.Sprintf("ns=4;s=MAIN.fbUA.%s", name)
+
+		last, ok := e.lastWritten[tag]
+		if ok && last == valve.Command {
+			continue
+		}
+
+		if err := e.client.WriteTag(ctx, tag, valve.Command); err == nil {
+			e.lastWritten[tag] = valve.Command
+		}
 	}
 
 	// Pumps
 	for name, pump := range e.state.Pumps {
 		tag := fmt.Sprintf("ns=4;s=MAIN.fbUA.%s", name)
-		_ = e.client.WriteTag(ctx, tag, pump.Command)
+
+		last, ok := e.lastWritten[tag]
+		if ok && last == pump.Command {
+			continue
+		}
+
+		if err := e.client.WriteTag(ctx, tag, pump.Command); err == nil {
+			e.lastWritten[tag] = pump.Command
+		}
 	}
 
 	// BK Heater
 	if e.state.BKHeater != nil {
 		tag := "ns=4;s=MAIN.fbUA.bkHeaterPower"
-		_ = e.client.WriteTag(ctx, tag, float32(e.state.BKHeater.Command))
+		val := float32(e.state.BKHeater.Command)
+
+		last, ok := e.lastWritten[tag]
+		if ok && last == val {
+			return // Return early here as heaters are usually at the end
+		}
+
+		if err := e.client.WriteTag(ctx, tag, val); err == nil {
+			e.lastWritten[tag] = val
+		}
 	}
 
 	// MLT Heater (using hltHeaterPower as control output)
 	if e.state.MLTHeater != nil {
 		tag := "ns=4;s=MAIN.fbUA.hltHeaterPower"
-		_ = e.client.WriteTag(ctx, tag, float32(e.state.MLTHeater.Command))
+		val := float32(e.state.MLTHeater.Command)
+
+		last, ok := e.lastWritten[tag]
+		if ok && last == val {
+			return
+		}
+
+		if err := e.client.WriteTag(ctx, tag, val); err == nil {
+			e.lastWritten[tag] = val
+		}
 	}
 }
 
