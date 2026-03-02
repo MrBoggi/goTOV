@@ -203,7 +203,7 @@ func (s *Server) handleWS(w http.ResponseWriter, r *http.Request) {
 	s.mu.Lock()
 	s.subscribers[conn] = true
 	s.mu.Unlock()
-	s.log.Info().Msg("💬 WS client connected")
+	s.log.Info().Str("remote", conn.RemoteAddr().String()).Msg("💬 WS client connected")
 
 	// Send initial snapshot
 	s.latestMu.RLock()

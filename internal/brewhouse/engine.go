@@ -282,45 +282,43 @@ func (e *Engine) evaluate(ctx context.Context) {
 func (e *Engine) writeToUA(ctx context.Context) {
 	// Digital Valves
 	for name, valve := range e.state.Valves {
-		tag := fmt.Sprintf("ns=4;s=MAIN.fbUA.%s_State", name)
+		tag := fmt.Sprintf("ns=4;s=MAIN.fbUA.%s", name) // Key is now the exact tag name
 		_ = e.client.WriteTag(ctx, tag, valve.Command)
 	}
 
 	// Pumps
 	for name, pump := range e.state.Pumps {
-		tag := fmt.Sprintf("ns=4;s=MAIN.fbUA.%s_State", name)
+		tag := fmt.Sprintf("ns=4;s=MAIN.fbUA.%s", name)
 		_ = e.client.WriteTag(ctx, tag, pump.Command)
-	}
-
-	// Analog Valve PV1
-	if e.state.ProportionalV != nil {
-		tag := "ns=4;s=MAIN.fbUA.PV1_State"
-		_ = e.client.WriteTag(ctx, tag, e.state.ProportionalV.Command)
 	}
 
 	// BK Heater
 	if e.state.BKHeater != nil {
-		tag := "ns=4;s=MAIN.fbUA.BK_Heater_State"
-		_ = e.client.WriteTag(ctx, tag, e.state.BKHeater.Command)
+		tag := "ns=4;s=MAIN.fbUA.bkHeaterPower"
+		_ = e.client.WriteTag(ctx, tag, float32(e.state.BKHeater.Command))
 	}
 
-	// MLT Heater (Note: Assuming we might have a tag for this or it's handled via the same mechanism)
+	// MLT Heater (using hltHeaterPower as control output)
 	if e.state.MLTHeater != nil {
-		tag := "ns=4;s=MAIN.fbUA.MLT_Heater_State" // Added this assumption based on previous tags
-		_ = e.client.WriteTag(ctx, tag, e.state.MLTHeater.Command)
+		tag := "ns=4;s=MAIN.fbUA.hltHeaterPower"
+		_ = e.client.WriteTag(ctx, tag, float32(e.state.MLTHeater.Command))
 	}
 }
 
 func (e *Engine) readSensors(ctx context.Context) {
 	// A list of sensors to poll to keep internal state updated
 	sensors := map[string]string{
-		"bkTemp":   "ns=4;s=MAIN.fbUA.bkTemp",
-		"mltTemp":  "ns=4;s=MAIN.fbUA.mltTemp",
-		"mltPH":    "ns=4;s=MAIN.fbUA.mltPH",
-		"mltLevel": "ns=4;s=MAIN.fbUA.mltLevel",
-		"bkLevel":  "ns=4;s=MAIN.fbUA.bkLevel",
-		"flowHLT":  "ns=4;s=MAIN.fbUA.flowHLT",
-		"flowMLT":  "ns=4;s=MAIN.fbUA.flowMLT",
+		"bkTemp":            "ns=4;s=MAIN.fbUA.bkTemp",
+		"mltTemp":           "ns=4;s=MAIN.fbUA.mltTemp",
+		"phValue":           "ns=4;s=MAIN.fbUA.phValue",
+		"flowHLT":           "ns=4;s=MAIN.fbUA.flowHLT",
+		"flowMLT":           "ns=4;s=MAIN.fbUA.flowMLT",
+		"hltResirkTemp":     "ns=4;s=MAIN.fbUA.hltResirkTemp",
+		"mltResirkTemp":     "ns=4;s=MAIN.fbUA.mltResirkTemp",
+		"spGravSensor":      "ns=4;s=MAIN.fbUA.spGravSensor",
+		"hxValvePosition":   "ns=4;s=MAIN.fbUA.hxValvePosition",
+		"heatExchWaterTemp": "ns=4;s=MAIN.fbUA.heatExchWaterTemp",
+		"heatExchWortTemp":  "ns=4;s=MAIN.fbUA.heatExchWortTemp",
 	}
 
 	for key, tag := range sensors {
