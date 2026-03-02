@@ -261,6 +261,7 @@ func (s *Server) handleWS(w http.ResponseWriter, r *http.Request) {
 		send:   make(chan WSMessage, 256),
 	}
 	s.registerCh <- client
+	s.log.Info().Str("remote", conn.RemoteAddr().String()).Msg("💬 WS client connected")
 
 	// Start write pump in a separate goroutine
 	go client.writePump()
