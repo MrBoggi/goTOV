@@ -45,6 +45,10 @@ func (e *Engine) Start() {
 		e.log.Error().Err(err).Msg("❌ Failed to load brewhouse state, using initial state")
 		state = InitialState()
 	}
+
+	// Sanitize state: ensure all expected fields are present (safety against DB schema delta)
+	e.sanitizeState(state)
+
 	e.state = state
 	e.lastEvaluation = time.Now()
 	e.lastHistoryLog = time.Now()
@@ -103,11 +107,13 @@ func (e *Engine) UpdateState(newState *BrewhouseState) error {
 		}
 	}
 
+	e.sanitizeState(newState)
 	e.state = newState
 	e.mu.Unlock()
 
 	// Persist changes
 	if err := e.store.SaveState(newState); err != nil {
+
 		e.log.Error().Err(err).Msg("Failed to save brewhouse state to DB")
 		return err
 	}
@@ -117,7 +123,29 @@ func (e *Engine) UpdateState(newState *BrewhouseState) error {
 	return nil
 }
 
+func (e *Engine) sanitizeState(state *BrewhouseState) {
+	if state.Valves == nil {
+		state.Valves = make(map[string]*DigitalActuator)
+	}
+	if state.Pumps == nil {
+		state.Pumps = make(map[string]*DigitalActuator)
+	}
+	if state.BKHeater == nil {
+		state.BKHeater = &AnalogActuator{Mode: ModeManual}
+	}
+	if state.MLTHeater == nil {
+		state.MLTHeater = &AnalogActuator{Mode: ModeManual}
+	}
+	if state.ProportionalV == nil {
+		state.ProportionalV = &AnalogActuator{Mode: ModeManual}
+	}
+	if state.Sensors == nil {
+		state.Sensors = make(map[string]float64)
+	}
+}
+
 func (e *Engine) run() {
+
 	defer e.wg.Done()
 
 	// Fast loop for brewhouse responsiveness (e.g. 1 second)
@@ -343,13 +371,20 @@ func (e *Engine) readSensors(ctx context.Context) {
 
 func (e *Engine) logHistory() {
 	entry := &HistoryEntry{
-		Timestamp:  time.Now(),
-		BKTemp:     e.state.Sensors["bkTemp"],
-		MLTTemp:    e.state.Sensors["mltTemp"],
-		BKPadraag:  e.state.BKHeater.Command,
-		MLTPadraag: e.state.MLTHeater.Command,
+		Timestamp: time.Now(),
+		BKTemp:    e.state.Sensors["bkTemp"],
+		MLTTemp:   e.state.Sensors["mltTemp"],
 	}
+
+	if e.state.BKHeater != nil {
+		entry.BKPadraag = e.state.BKHeater.Command
+	}
+	if e.state.MLTHeater != nil {
+		entry.MLTPadraag = e.state.MLTHeater.Command
+	}
+
 	if err := e.store.LogHistory(entry); err != nil {
+
 		e.log.Error().Err(err).Msg("Failed to log brewhouse history")
 	}
 }
