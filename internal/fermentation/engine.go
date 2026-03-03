@@ -69,6 +69,12 @@ func (e *Engine) Restore() error {
 	defer e.mu.Unlock()
 
 	for i := range active {
+		// Fetch active events
+		events, err := e.store.GetActiveEvents(active[i].ID)
+		if err == nil {
+			active[i].Events = events
+		}
+
 		e.active[active[i].ID] = &active[i]
 		e.log.Info().
 			Int64("id", active[i].ID).

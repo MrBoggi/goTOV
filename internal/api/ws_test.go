@@ -31,6 +31,9 @@ type MockFermentationStore struct {
 	GetHistoryFunc              func(fermentationID int64, hours float64) ([]fermentation.FermentationHistoryEntry, error)
 	LogGlycolDataFunc           func(temp float64, pressure *float64, load float64) error
 	GetGlycolHistoryFunc        func(hours float64) ([]fermentation.GlycolHistoryData, error)
+	GetEventsFunc               func(planID int64) ([]fermentation.FermentationEvent, error)
+	GetActiveEventsFunc         func(activeID int64) ([]fermentation.ActiveFermentationEvent, error)
+	CompleteEventFunc           func(fermentationID int64, eventIndex int) error
 }
 
 func (m *MockFermentationStore) SavePlan(plan fermentation.FermentationPlan) (int64, error) {
@@ -145,6 +148,27 @@ func (m *MockFermentationStore) Clear() error {
 func (m *MockFermentationStore) DeletePlan(id int64) error {
 	if m.DeletePlanFunc != nil {
 		return m.DeletePlanFunc(id)
+	}
+	return nil
+}
+
+func (m *MockFermentationStore) GetEvents(planID int64) ([]fermentation.FermentationEvent, error) {
+	if m.GetEventsFunc != nil {
+		return m.GetEventsFunc(planID)
+	}
+	return nil, nil
+}
+
+func (m *MockFermentationStore) GetActiveEvents(activeID int64) ([]fermentation.ActiveFermentationEvent, error) {
+	if m.GetActiveEventsFunc != nil {
+		return m.GetActiveEventsFunc(activeID)
+	}
+	return nil, nil
+}
+
+func (m *MockFermentationStore) CompleteEvent(fermentationID int64, eventIndex int) error {
+	if m.CompleteEventFunc != nil {
+		return m.CompleteEventFunc(fermentationID, eventIndex)
 	}
 	return nil
 }
