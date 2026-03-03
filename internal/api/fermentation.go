@@ -21,6 +21,11 @@ type StopFermentationRequest struct {
 	TankID string `json:"tankId"`
 }
 
+type CompleteFermentationEventRequest struct {
+	FermentationID int64 `json:"fermentationId"`
+	EventIndex     int   `json:"eventIndex"`
+}
+
 func (s *Server) handleSaveFermentationPlan(w http.ResponseWriter, r *http.Request) {
 	var plan fermentation.FermentationPlan
 	if err := json.NewDecoder(r.Body).Decode(&plan); err != nil {
@@ -132,6 +137,32 @@ func (s *Server) handleStopFermentation(w http.ResponseWriter, r *http.Request) 
 	_ = json.NewEncoder(w).Encode(map[string]interface{}{"status": "ok"})
 }
 
+func (s *Server) handleCompleteFermentationEvent(w http.ResponseWriter, r *http.Request) {
+	var req CompleteFermentationEventRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		s.log.Error().Err(err).Msg("failed to decode complete event request")
+		http.Error(w, "invalid JSON", http.StatusBadRequest)
+		return
+	}
+
+	if err := s.fermentationStore.CompleteEvent(req.FermentationID, req.EventIndex); err != nil {
+		if errors.Is(err, fermentation.ErrEventNotFound) {
+			http.Error(w, "event not found", http.StatusNotFound)
+			return
+		}
+		s.log.Error().Err(err).
+			Int64("fermentationId", req.FermentationID).
+			Int("eventIndex", req.EventIndex).
+			Msg("failed to complete fermentation event")
+		http.Error(w, "failed to complete event", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{"status": "ok"})
+}
+
 func (s *Server) handleDeleteFermentationPlan(w http.ResponseWriter, r *http.Request) {
 	idStr := chi.URLParam(r, "id")
 	id, err := strconv.ParseInt(idStr, 10, 64)
@@ -225,6 +256,12 @@ func (s *Server) handleGetFermentationStatus(w http.ResponseWriter, r *http.Requ
 		if err == nil && active[i].StepIndex < len(steps) {
 			active[i].StepDuration = steps[active[i].StepIndex].DurationHours
 		}
+
+		// Fetch active events for the UI
+		events, err := s.fermentationStore.GetActiveEvents(active[i].ID)
+		if err == nil {
+			active[i].Events = events
+		}
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -241,6 +278,7 @@ func (s *Server) handleGetApiDocs(w http.ResponseWriter, r *http.Request) {
 			{"method": "POST", "path": "/api/fermentation/plan", "description": "Save a new fermentation plan"},
 			{"method": "POST", "path": "/api/fermentation/start", "description": "Start a fermentation (requires planId, tankId, batchId)"},
 			{"method": "POST", "path": "/api/fermentation/stop", "description": "Stop a fermentation (requires id or tankId)"},
+			{"method": "POST", "path": "/api/fermentation/event/complete", "description": "Mark a fermentation event as completed (requires fermentationId, eventIndex)"},
 			{"method": "GET", "path": "/api/fermentation/status", "description": "Get status of all active fermentations"},
 			{"method": "DELETE", "path": "/api/fermentation/plan/{id}", "description": "Delete a plan. Use ?force=true to stop active ones"},
 

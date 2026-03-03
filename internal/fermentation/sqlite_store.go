@@ -97,6 +97,27 @@ CREATE TABLE IF NOT EXISTS glycol_history (
     pressure REAL,
     load_percentage REAL NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS fermentation_plan_events (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    plan_id INTEGER NOT NULL,
+    offset_hours REAL NOT NULL,
+    description TEXT,
+    type TEXT,
+    FOREIGN KEY(plan_id) REFERENCES fermentation_plans(id)
+);
+
+CREATE TABLE IF NOT EXISTS active_fermentation_events (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    active_id INTEGER NOT NULL,
+    event_index INTEGER NOT NULL,
+    offset_hours REAL NOT NULL,
+    description TEXT,
+    type TEXT,
+    completed BOOLEAN NOT NULL DEFAULT 0,
+    completed_at TIMESTAMP,
+    FOREIGN KEY(active_id) REFERENCES fermentation_states(id)
+);
 `
 	_, err := s.DB.Exec(schema)
 	if err != nil {
@@ -174,6 +195,17 @@ VALUES (?, ?, ?, ?, ?, ?)`,
 			return 0, fmt.Errorf("insert step: %w", err)
 		}
 	}
+
+	for _, event := range plan.Events {
+		_, err := s.DB.Exec(`
+INSERT INTO fermentation_plan_events 
+(plan_id, offset_hours, description, type)
+VALUES (?, ?, ?, ?)`,
+			planID, event.OffsetHours, event.Description, event.Type)
+		if err != nil {
+			return 0, fmt.Errorf("insert event: %w", err)
+		}
+	}
 	return planID, nil
 }
 
@@ -193,17 +225,27 @@ func (s *SQLiteStore) ListSteps(planID int64) ([]FermentationStep, error) {
 	return steps, err
 }
 
+func (s *SQLiteStore) GetEvents(planID int64) ([]FermentationEvent, error) {
+	var events []FermentationEvent
+	err := s.DB.Select(&events, "SELECT offset_hours, description, type FROM fermentation_plan_events WHERE plan_id = ? ORDER BY offset_hours ASC", planID)
+	return events, err
+}
+
 func (s *SQLiteStore) ListPlans() ([]FermentationPlan, error) {
 	var plans []FermentationPlan
 	err := s.DB.Select(&plans, "SELECT * FROM fermentation_plans")
 	if err != nil {
 		return nil, err
 	}
-	// Fetch steps for each plan
+	// Fetch steps and events for each plan
 	for i := range plans {
 		steps, err := s.GetSteps(plans[i].ID)
 		if err == nil {
 			plans[i].Steps = steps
+		}
+		events, err := s.GetEvents(plans[i].ID)
+		if err == nil {
+			plans[i].Events = events
 		}
 	}
 	return plans, nil
@@ -237,6 +279,21 @@ VALUES (:plan_id, :tank_id, :batch_id, :step_index, :started_at, :step_started_a
 	}
 
 	id, _ := res.LastInsertId()
+
+	// Copy events from plan to active_fermentation_events
+	events, err := s.GetEvents(planID)
+	if err == nil {
+		for i, ev := range events {
+			_, err = s.DB.Exec(`
+INSERT INTO active_fermentation_events (active_id, event_index, offset_hours, description, type, completed)
+VALUES (?, ?, ?, ?, ?, 0)`,
+				id, i, ev.OffsetHours, ev.Description, ev.Type)
+			if err != nil {
+				return 0, fmt.Errorf("failed to copy event to active fermentation: %w", err)
+			}
+		}
+	}
+
 	return id, nil
 }
 
@@ -256,6 +313,36 @@ func (s *SQLiteStore) GetStateByTank(tankID string) (FermentationState, error) {
 	var state FermentationState
 	err := s.DB.Get(&state, "SELECT * FROM fermentation_states WHERE tank_id = ? AND status = ? ORDER BY started_at DESC LIMIT 1", tankID, StatusRunning)
 	return state, err
+}
+
+func (s *SQLiteStore) GetActiveEvents(activeID int64) ([]ActiveFermentationEvent, error) {
+	var events []ActiveFermentationEvent
+	err := s.DB.Select(&events, `
+		SELECT offset_hours, description, type, completed, completed_at 
+		FROM active_fermentation_events 
+		WHERE active_id = ? 
+		ORDER BY offset_hours ASC`, activeID)
+	return events, err
+}
+
+func (s *SQLiteStore) CompleteEvent(fermentationID int64, eventIndex int) error {
+	now := SQLiteTime{time.Now().UTC()}
+	res, err := s.DB.Exec(`
+		UPDATE active_fermentation_events 
+		SET completed = 1, completed_at = ? 
+		WHERE active_id = ? AND event_index = ?`,
+		now, fermentationID, eventIndex)
+	if err != nil {
+		return err
+	}
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return ErrEventNotFound
+	}
+	return nil
 }
 
 func (s *SQLiteStore) StopFermentation(id int64) error {
@@ -340,6 +427,12 @@ func (s *SQLiteStore) DeletePlan(id int64) error {
 		return fmt.Errorf("delete steps: %w", err)
 	}
 
+	// Delete plan events
+	_, err = tx.Exec("DELETE FROM fermentation_plan_events WHERE plan_id = ?", id)
+	if err != nil {
+		return fmt.Errorf("delete plan events: %w", err)
+	}
+
 	// Delete plan
 	_, err = tx.Exec("DELETE FROM fermentation_plans WHERE id = ?", id)
 	if err != nil {
@@ -350,7 +443,7 @@ func (s *SQLiteStore) DeletePlan(id int64) error {
 }
 
 func (s *SQLiteStore) Clear() error {
-	_, err := s.DB.Exec("DELETE FROM fermentation_steps; DELETE FROM fermentation_states; DELETE FROM fermentation_plans; DELETE FROM glycol_history;")
+	_, err := s.DB.Exec("DELETE FROM fermentation_steps; DELETE FROM fermentation_plan_events; DELETE FROM active_fermentation_events; DELETE FROM fermentation_states; DELETE FROM fermentation_plans; DELETE FROM glycol_history;")
 	return err
 }
 
