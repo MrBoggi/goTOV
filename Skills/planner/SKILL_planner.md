@@ -27,7 +27,7 @@ Use the following structure:
 - **Task Assignments**: Explicitly map roles to specialized `Skills/` files detected in step 1.
 - **Scope**: Define clear boundaries.
 - **Action Items**: Atomic, ordered tasks. Use [Coder] and [Reviewer] prefixes to show who does what.
-- **Validation**: Specific steps to prove the logic works (logs, tests, race detector).
+- **Validation**: Specific steps to prove the logic works (logs, tests, race detector). **MANDATORY**: Always include `golangci-lint run ./...` for Go tasks.
 
 ## Plan Template
 

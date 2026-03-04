@@ -43,6 +43,7 @@ For this project, we utilize specialized agent roles to ensure high quality and 
     - `data/`: Database files (SQLite/etc).
 - **Coding Standards**:
     - **Formatting**: Always run `gofmt` or `goimports` on changed files before commit.
+    - **Linting**: Always run `golangci-lint run ./...` before creating a Pull Request. No lint errors are allowed.
     - **Error Handling**: Never ignore errors (`_`). Wrap with context: `fmt.Errorf("context: %w", err)`.
     - **Context**: Pass `context.Context` as the first argument for I/O, database, and PLC calls.
     - **Naming**: Follow standard Go conventions (CamelCase, descriptive names).

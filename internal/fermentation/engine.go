@@ -31,12 +31,11 @@ type Engine struct {
 	lastWritten         map[string]interface{}
 
 	// Non-blocking sequences
-	seqMu               sync.Mutex
-	desiredValves       map[string]bool // tankID -> bool
-	actualValves        map[string]bool // tankID -> bool
-	actualPump          bool
-	pumpTransitioning   bool
-	valvesTransitioning bool
+	seqMu             sync.Mutex
+	desiredValves     map[string]bool // tankID -> bool
+	actualValves      map[string]bool // tankID -> bool
+	actualPump        bool
+	pumpTransitioning bool
 }
 
 func NewEngine(store FermentationStore, client *opcua.Client, log zerolog.Logger) *Engine {
