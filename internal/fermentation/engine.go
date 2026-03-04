@@ -456,10 +456,28 @@ func (e *Engine) processOne(state *FermentationState) (bool, error) {
 		}
 
 		// 4. Update Thermostat States based on currentTemp
+		// Cooling logic: Start if > target + 0.2, stop if <= target
+		// Heating logic: Start if < target - 0.2, stop if >= target
+
+		valveTag := fmt.Sprintf("ns=4;s=MAIN.fbUA.fermenter%sKjoleventil", state.TankID)
+		jacketTag := fmt.Sprintf("ns=4;s=MAIN.fbUA.fermenter%sVarmekappe", state.TankID)
+
+		// Get last known states to implement the "stop at target" logic
+		e.mu.RLock()
+		lastCooling, _ := e.lastWritten[valveTag].(bool)
+		lastHeating, _ := e.lastWritten[jacketTag].(bool)
+		e.mu.RUnlock()
+
 		if currentTemp > target+hysteresis {
 			cooling = true
-		} else if currentTemp < target-hysteresis {
+		} else if currentTemp > target {
+			cooling = lastCooling // Stay on if already cooling, but don't start
+		}
+
+		if currentTemp < target-hysteresis {
 			heating = true
+		} else if currentTemp < target {
+			heating = lastHeating // Stay on if already heating, but don't start
 		}
 
 		e.log.Debug().
@@ -468,6 +486,8 @@ func (e *Engine) processOne(state *FermentationState) (bool, error) {
 			Float32("target", target).
 			Bool("cooling", cooling).
 			Bool("heating", heating).
+			Bool("lastCooling", lastCooling).
+			Bool("lastHeating", lastHeating).
 			Bool("transitioning", state.Transitioning).
 			Msg("🌡️ Thermostat decision")
 
