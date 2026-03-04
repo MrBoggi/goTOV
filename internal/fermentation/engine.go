@@ -90,6 +90,63 @@ func (e *Engine) Restore() error {
 			Str("tank", active[i].TankID).
 			Msg("🔄 Restored active fermentation")
 	}
+
+	// Sync with PLC hardware state to avoid startup desync
+	if e.client != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		if err := e.syncHardwareState(ctx); err != nil {
+			e.log.Error().Err(err).Msg("⚠️ Failed to sync hardware state on startup")
+		}
+	}
+
+	return nil
+}
+
+func (e *Engine) syncHardwareState(ctx context.Context) error {
+	e.seqMu.Lock()
+	defer e.seqMu.Unlock()
+
+	e.log.Info().Msg("🔄 Syncing engine state with PLC hardware...")
+
+	// 1. Sync Pump
+	pumpTag := "ns=4;s=MAIN.fbUA.glykolkjolerPumpe"
+	val, err := e.client.ReadNodeValue(ctx, pumpTag)
+	if err == nil {
+		if isOn, ok := val.(bool); ok {
+			e.actualPump = isOn
+			e.lastWritten[pumpTag] = isOn
+			e.log.Debug().Bool("on", isOn).Msg("✅ Synced glycol pump state")
+		}
+	} else {
+		e.log.Warn().Err(err).Str("tag", pumpTag).Msg("failed to sync pump state")
+	}
+
+	// 2. Sync Valves & Heaters for all potential tanks
+	// We check for tanks mentioned in current active fermentations, but also generic symbols if possible.
+	// For simplicity, let's check tanks 1 and 2 as defined in nodes.go
+	for _, tankID := range []string{"1", "2"} {
+		valveTag := fmt.Sprintf("ns=4;s=MAIN.fbUA.fermenter%sKjoleventil", tankID)
+		jacketTag := fmt.Sprintf("ns=4;s=MAIN.fbUA.fermenter%sVarmekappe", tankID)
+
+		// Sync Valve
+		if val, err := e.client.ReadNodeValue(ctx, valveTag); err == nil {
+			if isOpen, ok := val.(bool); ok {
+				e.actualValves[tankID] = isOpen
+				e.lastWritten[valveTag] = isOpen
+				e.log.Debug().Str("tank", tankID).Bool("open", isOpen).Msg("✅ Synced cooling valve state")
+			}
+		}
+
+		// Sync Jacket
+		if val, err := e.client.ReadNodeValue(ctx, jacketTag); err == nil {
+			if isOn, ok := val.(bool); ok {
+				e.lastWritten[jacketTag] = isOn
+				e.log.Debug().Str("tank", tankID).Bool("on", isOn).Msg("✅ Synced heating jacket state")
+			}
+		}
+	}
+
 	return nil
 }
 
@@ -312,12 +369,28 @@ func (e *Engine) orchestrateGlycol(anyCoolingDesired bool) {
 			e.pumpTransitioning = false // retry next loop if write failed
 		}
 	} else if !e.pumpTransitioning {
-		// Sync any valves that should close while pump is still running
+		// FALLBACK RECONCILIATION:
+		// 1. Sync any valves that should close while pump is still running
 		// (allowed as long as at least one remains open)
 		if e.actualPump {
 			for tankID, actual := range e.actualValves {
 				if actual && !e.desiredValves[tankID] {
 					valveTag := fmt.Sprintf("ns=4;s=MAIN.fbUA.fermenter%sKjoleventil", tankID)
+					if err := e.client.WriteTag(ctx, valveTag, false); err == nil {
+						e.actualValves[tankID] = false
+						e.lastWritten[valveTag] = false
+					}
+				}
+			}
+		}
+
+		// 2. CRITICAL FIX: If pump is OFF but valves are OPEN and not desired, close them.
+		// This handles cases where pump was turned off externally or sequences were interrupted.
+		if !e.actualPump {
+			for tankID, actual := range e.actualValves {
+				if actual && !e.desiredValves[tankID] {
+					valveTag := fmt.Sprintf("ns=4;s=MAIN.fbUA.fermenter%sKjoleventil", tankID)
+					e.log.Warn().Str("tank", tankID).Msg("⚠️ Valve persistence detected while pump is OFF. Closing valve.")
 					if err := e.client.WriteTag(ctx, valveTag, false); err == nil {
 						e.actualValves[tankID] = false
 						e.lastWritten[valveTag] = false
