@@ -29,6 +29,14 @@ type Engine struct {
 	lastGlycolLogTime   time.Time
 	currentGlycolLoad   float64
 	lastWritten         map[string]interface{}
+
+	// Non-blocking sequences
+	seqMu               sync.Mutex
+	desiredValves       map[string]bool // tankID -> bool
+	actualValves        map[string]bool // tankID -> bool
+	actualPump          bool
+	pumpTransitioning   bool
+	valvesTransitioning bool
 }
 
 func NewEngine(store FermentationStore, client *opcua.Client, log zerolog.Logger) *Engine {
@@ -40,6 +48,8 @@ func NewEngine(store FermentationStore, client *opcua.Client, log zerolog.Logger
 		active:            make(map[int64]*FermentationState),
 		lastGlycolLogTime: time.Now(),
 		lastWritten:       make(map[string]interface{}),
+		desiredValves:     make(map[string]bool),
+		actualValves:      make(map[string]bool),
 	}
 }
 
@@ -224,25 +234,102 @@ func (e *Engine) processAll() {
 		}
 	}
 
-	// 5. Glycol Pump Interlock: Only run if state changed
-	if e.client != nil {
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cancel()
+	// 5. Glycol Pump Interlock: Safe Sequential Coordination
+	e.orchestrateGlycol(anyCooling)
+}
 
-		pumpTag := "ns=4;s=MAIN.fbUA.glykolkjolerPumpe"
-		last, ok := e.lastWritten[pumpTag]
-		if !ok || last != anyCooling {
-			err := e.client.WriteTag(ctx, pumpTag, anyCooling)
-			if err != nil {
-				e.log.Error().Err(err).Msg("failed to sync glycol pump")
-			} else {
-				e.lastWritten[pumpTag] = anyCooling
+func (e *Engine) orchestrateGlycol(anyCoolingDesired bool) {
+	if e.client == nil {
+		return
+	}
+
+	e.seqMu.Lock()
+	defer e.seqMu.Unlock()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	// 1. Handle Valve Synchronization (Desired -> Actual)
+	// We open valves immediately when desired.
+	// Closure happens AFTER pump stops in the stop sequence.
+	for tankID, desired := range e.desiredValves {
+		if desired && !e.actualValves[tankID] {
+			valveTag := fmt.Sprintf("ns=4;s=MAIN.fbUA.fermenter%sKjoleventil", tankID)
+			if err := e.client.WriteTag(ctx, valveTag, true); err == nil {
+				e.actualValves[tankID] = true
+				e.lastWritten[valveTag] = true
 			}
 		}
 	}
 
-	// Track pump duration for duty-cycle calculation
-	e.updatePumpTracking(anyCooling)
+	// 2. Handle Pump Sequence
+	pumpTag := "ns=4;s=MAIN.fbUA.glykolkjolerPumpe"
+
+	if anyCoolingDesired && !e.actualPump && !e.pumpTransitioning {
+		// START SEQUENCE: Valve is already open (step 1), wait 1s then start pump
+		e.pumpTransitioning = true
+		e.log.Info().Msg("⏳ Cooling requested: Waiting 1s for valves to settle before starting pump")
+		time.AfterFunc(1*time.Second, func() {
+			e.seqMu.Lock()
+			defer e.seqMu.Unlock()
+			tCtx, tCancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer tCancel()
+
+			if err := e.client.WriteTag(tCtx, pumpTag, true); err == nil {
+				e.actualPump = true
+				e.lastWritten[pumpTag] = true
+			}
+			e.pumpTransitioning = false
+			e.log.Info().Msg("🚀 Glycol pump STARTED")
+		})
+	} else if !anyCoolingDesired && e.actualPump && !e.pumpTransitioning {
+		// STOP SEQUENCE: Stop pump, wait 1s, then close all valves
+		e.pumpTransitioning = true
+		e.log.Info().Msg("⏳ Stopping cooling: Stopping pump first")
+		if err := e.client.WriteTag(ctx, pumpTag, false); err == nil {
+			e.actualPump = false
+			e.lastWritten[pumpTag] = false
+
+			e.log.Info().Msg("⏳ Pump stopped, waiting 1s before closing valves")
+			time.AfterFunc(1*time.Second, func() {
+				e.seqMu.Lock()
+				defer e.seqMu.Unlock()
+				tCtx, tCancel := context.WithTimeout(context.Background(), 5*time.Second)
+				defer tCancel()
+
+				for tankID, actual := range e.actualValves {
+					if actual && !e.desiredValves[tankID] {
+						valveTag := fmt.Sprintf("ns=4;s=MAIN.fbUA.fermenter%sKjoleventil", tankID)
+						if err := e.client.WriteTag(tCtx, valveTag, false); err == nil {
+							e.actualValves[tankID] = false
+							e.lastWritten[valveTag] = false
+						}
+					}
+				}
+				e.pumpTransitioning = false
+				e.log.Info().Msg("🔒 All glycol valves CLOSED (safe shutdown)")
+			})
+		} else {
+			e.pumpTransitioning = false // retry next loop if write failed
+		}
+	} else if !e.pumpTransitioning {
+		// Sync any valves that should close while pump is still running
+		// (allowed as long as at least one remains open)
+		if e.actualPump {
+			for tankID, actual := range e.actualValves {
+				if actual && !e.desiredValves[tankID] {
+					valveTag := fmt.Sprintf("ns=4;s=MAIN.fbUA.fermenter%sKjoleventil", tankID)
+					if err := e.client.WriteTag(ctx, valveTag, false); err == nil {
+						e.actualValves[tankID] = false
+						e.lastWritten[valveTag] = false
+					}
+				}
+			}
+		}
+	}
+
+	// 3. Track pump duration for duty-cycle calculation
+	e.updatePumpTracking(e.actualPump)
 }
 
 func (e *Engine) updatePumpTracking(isCurrentlyOn bool) {
@@ -510,23 +597,12 @@ func (e *Engine) setTankHardware(tankID string, cooling bool, heating bool) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	valveTag := fmt.Sprintf("ns=4;s=MAIN.fbUA.fermenter%sKjoleventil", tankID)
+	// Update desired cooling state
+	e.seqMu.Lock()
+	e.desiredValves[tankID] = cooling
+	e.seqMu.Unlock()
+
 	jacketTag := fmt.Sprintf("ns=4;s=MAIN.fbUA.fermenter%sVarmekappe", tankID)
-
-	// Diagnostic: read current type before writing
-	if val, err := e.client.ReadNodeValue(ctx, jacketTag); err == nil {
-		e.log.Debug().Str("tag", jacketTag).Interface("value", val).Msgf("🔎 Tag type diagnostic: %T", val)
-	}
-
-	// Change-only write for Valve
-	lastValve, okV := e.lastWritten[valveTag]
-	if !okV || lastValve != cooling {
-		if err := e.client.WriteTag(ctx, valveTag, cooling); err == nil {
-			e.lastWritten[valveTag] = cooling
-		} else {
-			e.log.Error().Err(err).Str("tag", valveTag).Msg("❌ Failed to write cooling valve")
-		}
-	}
 
 	// Change-only write for Jacket
 	lastJacket, okJ := e.lastWritten[jacketTag]

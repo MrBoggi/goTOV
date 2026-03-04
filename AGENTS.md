@@ -19,7 +19,7 @@ For this project, we utilize specialized agent roles to ensure high quality and 
 ### Skill: Architect (Planning)
 - **Role**: Analyze Git Issues and create detailed implementation plans.
 - **Model**: `gemini-3.1-pro-high`
-- **Responsibility**: Generate step-by-step plans in `ISSUE_TEMPLATE` or `implementation_plan.md`.
+- **Responsibility**: Generate step-by-step plans in `implementation_plan.md`. **MANDATORY**: Include a "Task Assignments" section specifying which models and files from `Skills/` will be used for each phase.
 
 ### Skill: Coder (Implementation)
 - **Role**: Write code based on an approved plan.
