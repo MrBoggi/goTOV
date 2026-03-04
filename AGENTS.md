@@ -19,7 +19,7 @@ For this project, we utilize specialized agent roles to ensure high quality and 
 ### Skill: Architect (Planning)
 - **Role**: Analyze Git Issues and create detailed implementation plans.
 - **Model**: `gemini-3.1-pro-high`
-- **Responsibility**: Generate step-by-step plans in `ISSUE_TEMPLATE` or `implementation_plan.md`.
+- **Responsibility**: Generate step-by-step plans in `implementation_plan.md`. **MANDATORY**: Include a "Task Assignments" section specifying which models and files from `Skills/` will be used for each phase.
 
 ### Skill: Coder (Implementation)
 - **Role**: Write code based on an approved plan.
@@ -43,6 +43,7 @@ For this project, we utilize specialized agent roles to ensure high quality and 
     - `data/`: Database files (SQLite/etc).
 - **Coding Standards**:
     - **Formatting**: Always run `gofmt` or `goimports` on changed files before commit.
+    - **Linting**: Always run `golangci-lint run ./...` before creating a Pull Request. No lint errors are allowed.
     - **Error Handling**: Never ignore errors (`_`). Wrap with context: `fmt.Errorf("context: %w", err)`.
     - **Context**: Pass `context.Context` as the first argument for I/O, database, and PLC calls.
     - **Naming**: Follow standard Go conventions (CamelCase, descriptive names).
