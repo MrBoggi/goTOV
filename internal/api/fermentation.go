@@ -78,6 +78,10 @@ func (s *Server) handleStartFermentation(w http.ResponseWriter, r *http.Request)
 
 	fermentationID, err := s.fermentationStore.StartFermentation(req.PlanID, req.TankID, req.BatchID)
 	if err != nil {
+		if errors.Is(err, fermentation.ErrTankBusy) {
+			http.Error(w, "tank already has an active fermentation running — stop it first", http.StatusConflict)
+			return
+		}
 		s.log.Error().Err(err).Msg("failed to start fermentation in store")
 		http.Error(w, "failed to start fermentation", http.StatusInternalServerError)
 		return

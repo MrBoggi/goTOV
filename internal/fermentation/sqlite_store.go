@@ -252,6 +252,16 @@ func (s *SQLiteStore) ListPlans() ([]FermentationPlan, error) {
 }
 
 func (s *SQLiteStore) StartFermentation(planID int64, tankID string, batchID string) (int64, error) {
+	// Hard block: A tank can only run ONE fermentation at a time.
+	var existingCount int
+	err := s.DB.Get(&existingCount, "SELECT COUNT(*) FROM fermentation_states WHERE tank_id = ? AND status = ?", tankID, StatusRunning)
+	if err != nil {
+		return 0, fmt.Errorf("check for existing active fermentation on tank %s: %w", tankID, err)
+	}
+	if existingCount > 0 {
+		return 0, ErrTankBusy
+	}
+
 	steps, err := s.GetSteps(planID)
 	if err != nil || len(steps) == 0 {
 		return 0, fmt.Errorf("get steps for starting fermentation: %w", err)

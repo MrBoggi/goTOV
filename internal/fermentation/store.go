@@ -9,6 +9,7 @@ var (
 	ErrPlanNotFound         = errors.New("fermentation plan not found")
 	ErrFermentationNotFound = errors.New("active fermentation not found")
 	ErrEventNotFound        = errors.New("event not found")
+	ErrTankBusy             = errors.New("tank already has an active fermentation running")
 )
 
 type FermentationStore interface {
