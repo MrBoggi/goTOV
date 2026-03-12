@@ -26,6 +26,11 @@ type CompleteFermentationEventRequest struct {
 	EventIndex     int   `json:"eventIndex"`
 }
 
+type SetFermentationModeRequest struct {
+	ID   int64  `json:"id"`
+	Mode string `json:"mode"`
+}
+
 func (s *Server) handleSaveFermentationPlan(w http.ResponseWriter, r *http.Request) {
 	var plan fermentation.FermentationPlan
 	if err := json.NewDecoder(r.Body).Decode(&plan); err != nil {
@@ -161,6 +166,49 @@ func (s *Server) handleCompleteFermentationEvent(w http.ResponseWriter, r *http.
 		http.Error(w, "failed to complete event", http.StatusInternalServerError)
 		return
 	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{"status": "ok"})
+}
+
+func (s *Server) handleSetFermentationMode(w http.ResponseWriter, r *http.Request) {
+	var req SetFermentationModeRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		s.log.Error().Err(err).Msg("failed to decode set fermentation mode request")
+		http.Error(w, "invalid JSON", http.StatusBadRequest)
+		return
+	}
+
+	if req.Mode != "Auto" && req.Mode != "Manual" {
+		http.Error(w, "mode must be Auto or Manual", http.StatusBadRequest)
+		return
+	}
+
+	state, err := s.fermentationStore.GetState(req.ID)
+	if err != nil {
+		s.log.Error().Err(err).Int64("id", req.ID).Msg("failed to get fermentation state for mode change")
+		http.Error(w, "fermentation not found", http.StatusNotFound)
+		return
+	}
+
+	state.Mode = req.Mode
+	if err := s.fermentationStore.UpdateState(state); err != nil {
+		s.log.Error().Err(err).Int64("id", req.ID).Msg("failed to update fermentation mode")
+		http.Error(w, "failed to update mode", http.StatusInternalServerError)
+		return
+	}
+
+	// Update in engine if active
+	if s.engine != nil {
+		// Just pull from engine to modify, then we don't need a formal method if it's already there or we can just update the DB and let the engine read it?
+		// Engine stores state pointers, so we could theoretically modify the pointer directly, but we don't have direct access in api.
+		// Since we updated the DB, next processOne would use old state pointer because engine holds it in memory.
+		// Wait, Engine needs a method to update the mode in memory.
+		s.engine.UpdateFermentationMode(req.ID, req.Mode)
+	}
+
+	s.log.Info().Int64("id", req.ID).Str("mode", req.Mode).Msg("🔄 Fermentation mode updated")
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)

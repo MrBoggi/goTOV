@@ -166,6 +166,16 @@ func (e *Engine) RemoveFermentation(id int64) {
 	e.log.Info().Int64("id", id).Msg("➖ Removed fermentation from engine map")
 }
 
+// UpdateFermentationMode modifies the mode of an active fermentation in memory.
+func (e *Engine) UpdateFermentationMode(id int64, mode string) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	if state, ok := e.active[id]; ok {
+		state.Mode = mode
+		e.log.Info().Int64("id", id).Str("mode", mode).Msg("🔄 Updated mode in engine memory")
+	}
+}
+
 // GetActiveStates returns a snapshot of all active fermentation states
 // including computed fields like Transitioning.
 func (e *Engine) GetActiveStates() []FermentationState {
@@ -615,47 +625,88 @@ func (e *Engine) processOne(state *FermentationState) (bool, error) {
 		}
 
 		// 4. Update Thermostat States based on currentTemp
-		// Cooling logic: Start if > target + 0.2, stop if <= target
-		// Heating logic: Start if < target - 0.2, stop if >= target
-
 		valveTag := fmt.Sprintf("ns=4;s=MAIN.fbUA.fermenter%sKjoleventil", state.TankID)
 		jacketTag := fmt.Sprintf("ns=4;s=MAIN.fbUA.fermenter%sVarmekappe", state.TankID)
 
-		// Get last known states to implement the "stop at target" logic
-		e.mu.RLock()
-		lastCooling, _ := e.lastWritten[valveTag].(bool)
-		lastHeating, _ := e.lastWritten[jacketTag].(bool)
-		e.mu.RUnlock()
+		if state.Mode == "Manual" {
+			// MANUAL MODE: Do not touch hardware, but read state to log and orchestrate glycol pump
+			val, err := e.client.ReadNodeValue(ctx, valveTag)
+			if err == nil {
+				if b, ok := val.(bool); ok {
+					coolingActive = b
+					// Sync to engine so pump logic knows cooling is demanded
+					e.seqMu.Lock()
+					e.desiredValves[state.TankID] = b
+					e.actualValves[state.TankID] = b
+					e.seqMu.Unlock()
 
-		if currentTemp > target+hysteresis {
-			cooling = true
-		} else if currentTemp > target {
-			cooling = lastCooling // Stay on if already cooling, but don't start
-		}
+					e.mu.Lock()
+					e.lastWritten[valveTag] = b
+					e.mu.Unlock()
+				}
+			}
 
-		if currentTemp < target-hysteresis {
-			heating = true
-		} else if currentTemp < target {
-			heating = lastHeating // Stay on if already heating, but don't start
-		}
+			heatingActive := false
+			valH, errH := e.client.ReadNodeValue(ctx, jacketTag)
+			if errH == nil {
+				if b, ok := valH.(bool); ok {
+					heatingActive = b
+					e.mu.Lock()
+					e.lastWritten[jacketTag] = b
+					e.mu.Unlock()
+				}
+			}
 
-		e.log.Debug().
-			Str("tank", state.TankID).
-			Float32("current", currentTemp).
-			Float32("target", target).
-			Bool("cooling", cooling).
-			Bool("heating", heating).
-			Bool("lastCooling", lastCooling).
-			Bool("lastHeating", lastHeating).
-			Bool("transitioning", state.Transitioning).
-			Msg("🌡️ Thermostat decision")
+			e.log.Debug().
+				Str("tank", state.TankID).
+				Float32("current", currentTemp).
+				Float32("target", target).
+				Bool("cooling", coolingActive).
+				Bool("heating", heatingActive).
+				Msg("🌡️ Mode is Manual - skipping hardware control")
 
-		e.setTankHardware(state.TankID, cooling, heating)
-		coolingActive = cooling
+			// Log to history
+			if err := e.store.LogData(state.ID, state.PlanID, state.TankID, state.BatchID, currentTemp, target, coolingActive, heatingActive); err != nil {
+				e.log.Error().Err(err).Msg("failed to log fermentation history for manual mode")
+			}
+		} else {
+			// AUTO MODE
+			// Get last known states to implement the "stop at target" logic
+			e.mu.RLock()
+			lastCooling, _ := e.lastWritten[valveTag].(bool)
+			lastHeating, _ := e.lastWritten[jacketTag].(bool)
+			e.mu.RUnlock()
 
-		// Log to history
-		if err := e.store.LogData(state.ID, state.PlanID, state.TankID, state.BatchID, currentTemp, target, cooling, heating); err != nil {
-			e.log.Error().Err(err).Msg("failed to log fermentation history")
+			if currentTemp > target+hysteresis {
+				cooling = true
+			} else if currentTemp > target {
+				cooling = lastCooling // Stay on if already cooling, but don't start
+			}
+
+			if currentTemp < target-hysteresis {
+				heating = true
+			} else if currentTemp < target {
+				heating = lastHeating // Stay on if already heating, but don't start
+			}
+
+			e.log.Debug().
+				Str("tank", state.TankID).
+				Float32("current", currentTemp).
+				Float32("target", target).
+				Bool("cooling", cooling).
+				Bool("heating", heating).
+				Bool("lastCooling", lastCooling).
+				Bool("lastHeating", lastHeating).
+				Bool("transitioning", state.Transitioning).
+				Msg("🌡️ Thermostat decision")
+
+			e.setTankHardware(state.TankID, cooling, heating)
+			coolingActive = cooling
+
+			// Log to history
+			if err := e.store.LogData(state.ID, state.PlanID, state.TankID, state.BatchID, currentTemp, target, cooling, heating); err != nil {
+				e.log.Error().Err(err).Msg("failed to log fermentation history for auto mode")
+			}
 		}
 	}
 
