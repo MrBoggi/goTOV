@@ -513,8 +513,8 @@ func (e *Engine) GetGlycolLoad() float64 {
 }
 
 func (e *Engine) processOne(state *FermentationState) (bool, error) {
-	// 1. Get current plan and steps
-	steps, err := e.store.GetSteps(state.PlanID)
+	// 1. Get current active steps
+	steps, err := e.store.GetActiveSteps(state.ID)
 	if err != nil {
 		return false, err
 	}
