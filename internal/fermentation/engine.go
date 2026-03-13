@@ -176,6 +176,26 @@ func (e *Engine) UpdateFermentationMode(id int64, mode string) {
 	}
 }
 
+// UpdateActiveStep updates the target temperature and duration for a running fermentation
+// if the stepIndex matches the current step being processed.
+func (e *Engine) UpdateActiveStep(id int64, stepIndex int, temperature float64, durationHours float64) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	if state, ok := e.active[id]; ok && state.StepIndex == stepIndex {
+		state.TargetTemp = temperature
+		// Update duration as well, since processOne uses it
+		// Note: We don't have a direct DurationHours on state, we fetch steps from store.
+		// Wait, state only has TargetTemp. The duration is checked against the steps slice in processOne.
+		// So we actually don't NEED to store duration on state, but we should log it.
+		state.TargetTemp = temperature
+		e.log.Info().
+			Int64("id", id).
+			Float64("temp", temperature).
+			Float64("duration", durationHours).
+			Msg("🔄 Updated active step parameters in engine memory")
+	}
+}
+
 // GetActiveStates returns a snapshot of all active fermentation states
 // including computed fields like Transitioning.
 func (e *Engine) GetActiveStates() []FermentationState {

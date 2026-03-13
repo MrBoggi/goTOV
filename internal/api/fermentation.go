@@ -269,6 +269,11 @@ func (s *Server) handleUpdateActiveFermentationStep(w http.ResponseWriter, r *ht
 		return
 	}
 
+	// Update in engine if active
+	if s.engine != nil {
+		s.engine.UpdateActiveStep(id, req.StepIndex, req.Temperature, req.DurationHours)
+	}
+
 	s.log.Info().Int64("id", id).Int("step", req.StepIndex).Msg("🔄 Active fermentation step updated")
 
 	w.Header().Set("Content-Type", "application/json")
