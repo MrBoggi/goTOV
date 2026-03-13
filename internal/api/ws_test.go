@@ -441,4 +441,3 @@ func TestUpdateActiveFermentationStepEndpoint(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, rr.Code)
 }
-
