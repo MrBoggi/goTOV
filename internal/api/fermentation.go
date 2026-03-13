@@ -31,6 +31,12 @@ type SetFermentationModeRequest struct {
 	Mode string `json:"mode"`
 }
 
+type UpdateActiveStepRequest struct {
+	StepIndex     int     `json:"stepIndex"`
+	Temperature   float64 `json:"temperature"`
+	DurationHours float64 `json:"durationHours"`
+}
+
 func (s *Server) handleSaveFermentationPlan(w http.ResponseWriter, r *http.Request) {
 	var plan fermentation.FermentationPlan
 	if err := json.NewDecoder(r.Body).Decode(&plan); err != nil {
@@ -52,6 +58,33 @@ func (s *Server) handleSaveFermentationPlan(w http.ResponseWriter, r *http.Reque
 		"status": "ok",
 		"planId": planID,
 	})
+}
+
+func (s *Server) handleUpdateFermentationPlan(w http.ResponseWriter, r *http.Request) {
+	idStr := chi.URLParam(r, "id")
+	id, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil {
+		http.Error(w, "invalid ID format", http.StatusBadRequest)
+		return
+	}
+
+	var plan fermentation.FermentationPlan
+	if err := json.NewDecoder(r.Body).Decode(&plan); err != nil {
+		s.log.Error().Err(err).Msg("failed to decode fermentation plan")
+		http.Error(w, "invalid JSON", http.StatusBadRequest)
+		return
+	}
+	plan.ID = id
+
+	if err := s.fermentationStore.UpdatePlan(plan); err != nil {
+		s.log.Error().Err(err).Int64("id", id).Msg("failed to update fermentation plan")
+		http.Error(w, "failed to update fermentation plan", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{"status": "ok"})
 }
 
 func (s *Server) handleListFermentationPlans(w http.ResponseWriter, r *http.Request) {
@@ -215,6 +248,34 @@ func (s *Server) handleSetFermentationMode(w http.ResponseWriter, r *http.Reques
 	_ = json.NewEncoder(w).Encode(map[string]interface{}{"status": "ok"})
 }
 
+func (s *Server) handleUpdateActiveFermentationStep(w http.ResponseWriter, r *http.Request) {
+	idStr := chi.URLParam(r, "id")
+	id, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil {
+		http.Error(w, "invalid ID format", http.StatusBadRequest)
+		return
+	}
+
+	var req UpdateActiveStepRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		s.log.Error().Err(err).Msg("failed to decode update active step request")
+		http.Error(w, "invalid JSON", http.StatusBadRequest)
+		return
+	}
+
+	if err := s.fermentationStore.UpdateActiveStep(id, req.StepIndex, req.Temperature, req.DurationHours); err != nil {
+		s.log.Error().Err(err).Int64("id", id).Int("step", req.StepIndex).Msg("failed to update active step")
+		http.Error(w, "failed to update active step", http.StatusInternalServerError)
+		return
+	}
+
+	s.log.Info().Int64("id", id).Int("step", req.StepIndex).Msg("🔄 Active fermentation step updated")
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{"status": "ok"})
+}
+
 func (s *Server) handleDeleteFermentationPlan(w http.ResponseWriter, r *http.Request) {
 	idStr := chi.URLParam(r, "id")
 	id, err := strconv.ParseInt(idStr, 10, 64)
@@ -304,7 +365,7 @@ func (s *Server) handleGetFermentationStatus(w http.ResponseWriter, r *http.Requ
 		if err == nil {
 			active[i].PlanName = plan.Name
 		}
-		steps, err := s.fermentationStore.GetSteps(active[i].PlanID)
+		steps, err := s.fermentationStore.GetActiveSteps(active[i].ID)
 		if err == nil && active[i].StepIndex < len(steps) {
 			active[i].StepDuration = steps[active[i].StepIndex].DurationHours
 		}
@@ -328,9 +389,11 @@ func (s *Server) handleGetApiDocs(w http.ResponseWriter, r *http.Request) {
 			// Fermentation
 			{"method": "GET", "path": "/api/fermentation/plans", "description": "List all fermentation plans"},
 			{"method": "POST", "path": "/api/fermentation/plan", "description": "Save a new fermentation plan"},
+			{"method": "PUT", "path": "/api/fermentation/plan/{id}", "description": "Update an existing fermentation plan"},
 			{"method": "POST", "path": "/api/fermentation/start", "description": "Start a fermentation (requires planId, tankId, batchId)"},
 			{"method": "POST", "path": "/api/fermentation/stop", "description": "Stop a fermentation (requires id or tankId)"},
 			{"method": "POST", "path": "/api/fermentation/event/complete", "description": "Mark a fermentation event as completed (requires fermentationId, eventIndex)"},
+			{"method": "PUT", "path": "/api/fermentation/active/{id}/step", "description": "Update a step in an active fermentation (requires stepIndex, temperature, durationHours)"},
 			{"method": "GET", "path": "/api/fermentation/status", "description": "Get status of all active fermentations"},
 			{"method": "DELETE", "path": "/api/fermentation/plan/{id}", "description": "Delete a plan. Use ?force=true to stop active ones"},
 

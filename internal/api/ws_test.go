@@ -33,6 +33,9 @@ type MockFermentationStore struct {
 	GetGlycolHistoryFunc        func(hours float64) ([]fermentation.GlycolHistoryData, error)
 	GetEventsFunc               func(planID int64) ([]fermentation.FermentationEvent, error)
 	GetActiveEventsFunc         func(activeID int64) ([]fermentation.ActiveFermentationEvent, error)
+	GetActiveStepsFunc          func(activeID int64) ([]fermentation.FermentationStep, error)
+	UpdateActiveStepFunc        func(activeID int64, stepIndex int, targetTemp float64, durationHours float64) error
+	UpdatePlanFunc              func(plan fermentation.FermentationPlan) error
 	CompleteEventFunc           func(fermentationID int64, eventIndex int) error
 }
 
@@ -164,6 +167,27 @@ func (m *MockFermentationStore) GetActiveEvents(activeID int64) ([]fermentation.
 		return m.GetActiveEventsFunc(activeID)
 	}
 	return nil, nil
+}
+
+func (m *MockFermentationStore) GetActiveSteps(activeID int64) ([]fermentation.FermentationStep, error) {
+	if m.GetActiveStepsFunc != nil {
+		return m.GetActiveStepsFunc(activeID)
+	}
+	return nil, nil
+}
+
+func (m *MockFermentationStore) UpdatePlan(plan fermentation.FermentationPlan) error {
+	if m.UpdatePlanFunc != nil {
+		return m.UpdatePlanFunc(plan)
+	}
+	return nil
+}
+
+func (m *MockFermentationStore) UpdateActiveStep(activeID int64, stepIndex int, targetTemp float64, durationHours float64) error {
+	if m.UpdateActiveStepFunc != nil {
+		return m.UpdateActiveStepFunc(activeID, stepIndex, targetTemp, durationHours)
+	}
+	return nil
 }
 
 func (m *MockFermentationStore) CompleteEvent(fermentationID int64, eventIndex int) error {
@@ -367,3 +391,54 @@ func TestDeleteFermentationPlanEndpoint(t *testing.T) {
 		assert.Equal(t, http.StatusBadRequest, rr.Code)
 	})
 }
+
+func TestUpdateFermentationPlanEndpoint(t *testing.T) {
+	log := logger.New()
+	mockStore := &MockFermentationStore{
+		UpdatePlanFunc: func(plan fermentation.FermentationPlan) error {
+			assert.Equal(t, int64(123), plan.ID)
+			assert.Equal(t, "Updated Plan", plan.Name)
+			return nil
+		},
+	}
+	server := NewServer(log, nil, mockStore, nil, nil, nil, nil, nil)
+
+	plan := fermentation.FermentationPlan{
+		Name:     "Updated Plan",
+		RecipeID: "RECIPE123",
+	}
+	body, _ := json.Marshal(plan)
+
+	req, _ := http.NewRequest("PUT", "/api/fermentation/plan/123", bytes.NewReader(body))
+	rr := httptest.NewRecorder()
+	server.Router().ServeHTTP(rr, req)
+
+	assert.Equal(t, http.StatusOK, rr.Code)
+}
+
+func TestUpdateActiveFermentationStepEndpoint(t *testing.T) {
+	log := logger.New()
+	mockStore := &MockFermentationStore{
+		UpdateActiveStepFunc: func(activeID int64, stepIndex int, targetTemp float64, durationHours float64) error {
+			assert.Equal(t, int64(456), activeID)
+			assert.Equal(t, 1, stepIndex)
+			assert.Equal(t, 20.5, targetTemp)
+			return nil
+		},
+	}
+	server := NewServer(log, nil, mockStore, nil, nil, nil, nil, nil)
+
+	reqBody := UpdateActiveStepRequest{
+		StepIndex:     1,
+		Temperature:   20.5,
+		DurationHours: 24,
+	}
+	body, _ := json.Marshal(reqBody)
+
+	req, _ := http.NewRequest("PUT", "/api/fermentation/active/456/step", bytes.NewReader(body))
+	rr := httptest.NewRecorder()
+	server.Router().ServeHTTP(rr, req)
+
+	assert.Equal(t, http.StatusOK, rr.Code)
+}
+

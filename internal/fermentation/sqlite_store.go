@@ -116,7 +116,18 @@ CREATE TABLE IF NOT EXISTS active_fermentation_events (
     type TEXT,
     completed BOOLEAN NOT NULL DEFAULT 0,
     completed_at TIMESTAMP,
-    FOREIGN KEY(active_id) REFERENCES fermentation_states(id)
+    FOREIGN KEY(active_id) REFERENCES fermentation_states(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS active_fermentation_steps (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    active_id INTEGER NOT NULL,
+    step_number INTEGER NOT NULL,
+    temperature REAL NOT NULL,
+    duration_hours REAL NOT NULL,
+    description TEXT,
+    type TEXT,
+    FOREIGN KEY(active_id) REFERENCES fermentation_states(id) ON DELETE CASCADE
 );
 `
 	_, err := s.DB.Exec(schema)
@@ -179,6 +190,27 @@ CREATE TABLE IF NOT EXISTS active_fermentation_events (
 		}
 	}
 
+	// Migrate existing active fermentations to have instanced steps
+	var activeIDs []int64
+	err = s.DB.Select(&activeIDs, "SELECT id FROM fermentation_states WHERE status = ?", StatusRunning)
+	if err == nil {
+		for _, id := range activeIDs {
+			var stepCount int
+			_ = s.DB.Get(&stepCount, "SELECT COUNT(*) FROM active_fermentation_steps WHERE active_id = ?", id)
+			if stepCount == 0 {
+				var planID int64
+				_ = s.DB.Get(&planID, "SELECT plan_id FROM fermentation_states WHERE id = ?", id)
+
+				// Copy steps from plan
+				_, _ = s.DB.Exec(`
+					INSERT INTO active_fermentation_steps (active_id, step_number, temperature, duration_hours, description, type)
+					SELECT ?, step_number, temperature, duration_hours, description, type
+					FROM fermentation_steps WHERE plan_id = ?`,
+					id, planID)
+			}
+		}
+	}
+
 	return nil
 }
 
@@ -216,6 +248,60 @@ VALUES (?, ?, ?, ?)`,
 		}
 	}
 	return planID, nil
+}
+
+func (s *SQLiteStore) UpdatePlan(plan FermentationPlan) error {
+	tx, err := s.DB.Beginx()
+	if err != nil {
+		return fmt.Errorf("begin transaction: %w", err)
+	}
+	defer func() {
+		_ = tx.Rollback()
+	}()
+
+	// Update main plan record
+	_, err = tx.Exec(`
+		UPDATE fermentation_plans 
+		SET name = ?, recipe_id = ?, total_steps = ? 
+		WHERE id = ?`,
+		plan.Name, plan.RecipeID, len(plan.Steps), plan.ID)
+	if err != nil {
+		return fmt.Errorf("update plan: %w", err)
+	}
+
+	// Delete existing steps and events
+	_, err = tx.Exec("DELETE FROM fermentation_steps WHERE plan_id = ?", plan.ID)
+	if err != nil {
+		return fmt.Errorf("delete old steps: %w", err)
+	}
+	_, err = tx.Exec("DELETE FROM fermentation_plan_events WHERE plan_id = ?", plan.ID)
+	if err != nil {
+		return fmt.Errorf("delete old events: %w", err)
+	}
+
+	// Insert new steps
+	for _, step := range plan.Steps {
+		_, err := tx.Exec(`
+			INSERT INTO fermentation_steps (plan_id, step_number, temperature, duration_hours, description, type)
+			VALUES (?, ?, ?, ?, ?, ?)`,
+			plan.ID, step.StepNumber, step.Temperature, step.DurationHours, step.Description, step.Type)
+		if err != nil {
+			return fmt.Errorf("insert new step: %w", err)
+		}
+	}
+
+	// Insert new events
+	for _, event := range plan.Events {
+		_, err := tx.Exec(`
+			INSERT INTO fermentation_plan_events (plan_id, offset_hours, description, type)
+			VALUES (?, ?, ?, ?)`,
+			plan.ID, event.OffsetHours, event.Description, event.Type)
+		if err != nil {
+			return fmt.Errorf("insert new event: %w", err)
+		}
+	}
+
+	return tx.Commit()
 }
 
 func (s *SQLiteStore) GetPlan(id int64) (FermentationPlan, error) {
@@ -314,6 +400,17 @@ VALUES (?, ?, ?, ?, ?, 0)`,
 		}
 	}
 
+	// Copy steps from plan to active_fermentation_steps
+	for _, step := range steps {
+		_, err = s.DB.Exec(`
+INSERT INTO active_fermentation_steps (active_id, step_number, temperature, duration_hours, description, type)
+VALUES (?, ?, ?, ?, ?, ?)`,
+			id, step.StepNumber, step.Temperature, step.DurationHours, step.Description, step.Type)
+		if err != nil {
+			return 0, fmt.Errorf("failed to copy step to active fermentation: %w", err)
+		}
+	}
+
 	return id, nil
 }
 
@@ -343,6 +440,31 @@ func (s *SQLiteStore) GetActiveEvents(activeID int64) ([]ActiveFermentationEvent
 		WHERE active_id = ? 
 		ORDER BY offset_hours ASC`, activeID)
 	return events, err
+}
+
+func (s *SQLiteStore) GetActiveSteps(activeID int64) ([]FermentationStep, error) {
+	var steps []FermentationStep
+	err := s.DB.Select(&steps, "SELECT step_number, temperature, duration_hours, description, type FROM active_fermentation_steps WHERE active_id = ? ORDER BY step_number ASC", activeID)
+	return steps, err
+}
+
+func (s *SQLiteStore) UpdateActiveStep(activeID int64, stepIndex int, targetTemp float64, durationHours float64) error {
+	res, err := s.DB.Exec(`
+		UPDATE active_fermentation_steps 
+		SET temperature = ?, duration_hours = ? 
+		WHERE active_id = ? AND step_number = ?`,
+		targetTemp, durationHours, activeID, stepIndex)
+	if err != nil {
+		return err
+	}
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return fmt.Errorf("active step not found")
+	}
+	return nil
 }
 
 func (s *SQLiteStore) CompleteEvent(fermentationID int64, eventIndex int) error {
@@ -463,7 +585,7 @@ func (s *SQLiteStore) DeletePlan(id int64) error {
 }
 
 func (s *SQLiteStore) Clear() error {
-	_, err := s.DB.Exec("DELETE FROM fermentation_steps; DELETE FROM fermentation_plan_events; DELETE FROM active_fermentation_events; DELETE FROM fermentation_states; DELETE FROM fermentation_plans; DELETE FROM glycol_history;")
+	_, err := s.DB.Exec("DELETE FROM fermentation_steps; DELETE FROM fermentation_plan_events; DELETE FROM active_fermentation_steps; DELETE FROM active_fermentation_events; DELETE FROM fermentation_states; DELETE FROM fermentation_plans; DELETE FROM glycol_history;")
 	return err
 }
 

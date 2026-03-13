@@ -103,3 +103,60 @@ func TestSQLiteStore_Events(t *testing.T) {
 	assert.Error(t, err)
 	assert.ErrorIs(t, err, ErrEventNotFound)
 }
+
+func TestSQLiteStore_PlanUpdateAndActiveStepOverride(t *testing.T) {
+	dbPath := "test_plan_update.db"
+	defer os.Remove(dbPath)
+
+	store, err := NewSQLiteStore(dbPath)
+	require.NoError(t, err)
+	defer store.Close()
+
+	// 1. Create a plan
+	plan := FermentationPlan{
+		Name:     "Adjustable Plan",
+		RecipeID: "R3",
+		Steps: []FermentationStep{
+			{StepNumber: 1, Temperature: 18.0, DurationHours: 48},
+			{StepNumber: 2, Temperature: 22.0, DurationHours: 72},
+		},
+	}
+	planID, err := store.SavePlan(plan)
+	require.NoError(t, err)
+	plan.ID = planID
+
+	// 2. Start fermentation (should copy steps)
+	activeID, err := store.StartFermentation(planID, "Tank1", "B3")
+	require.NoError(t, err)
+
+	// 3. Verify active steps were copied
+	activeSteps, err := store.GetActiveSteps(activeID)
+	assert.NoError(t, err)
+	assert.Len(t, activeSteps, 2)
+	assert.Equal(t, 18.0, activeSteps[0].Temperature)
+
+	// 4. Update the original plan
+	plan.Steps[0].Temperature = 19.0
+	err = store.UpdatePlan(plan)
+	assert.NoError(t, err)
+
+	// 5. Verify the active fermentation still has the OLD temperature (isolation)
+	activeSteps, err = store.GetActiveSteps(activeID)
+	assert.NoError(t, err)
+	assert.Equal(t, 18.0, activeSteps[0].Temperature)
+
+	// 6. Override the active step temperature (step_number 1)
+	err = store.UpdateActiveStep(activeID, 1, 20.0, 50.0)
+	assert.NoError(t, err)
+
+	// 7. Verify the override
+	activeSteps, err = store.GetActiveSteps(activeID)
+	assert.NoError(t, err)
+	assert.Equal(t, 20.0, activeSteps[0].Temperature)
+	assert.Equal(t, 50.0, activeSteps[0].DurationHours)
+
+	// 8. Verify the plan remains unchanged by the active step override
+	planSteps, err := store.GetSteps(planID)
+	assert.NoError(t, err)
+	assert.Equal(t, 19.0, planSteps[0].Temperature) // Updated in step 4
+}
