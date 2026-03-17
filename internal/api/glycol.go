@@ -36,6 +36,9 @@ func (s *Server) handleGetGlycolStatus(w http.ResponseWriter, r *http.Request) {
 	status.LoadPercentage = 0.0
 	if s.engine != nil {
 		status.LoadPercentage = s.engine.GetGlycolLoad()
+		status.Mode, status.ManualPumpOn = s.engine.GetGlycolSettings()
+	} else {
+		status.Mode = "Auto" // Fallback if engine is nil
 	}
 
 	// Fetch history from the last 24 hours
@@ -55,4 +58,42 @@ func (s *Server) handleGetGlycolStatus(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	_ = json.NewEncoder(w).Encode(status)
+}
+
+func (s *Server) handleSetGlycolMode(w http.ResponseWriter, r *http.Request) {
+	var req fermentation.GlycolModeRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "invalid JSON", http.StatusBadRequest)
+		return
+	}
+
+	if s.engine == nil {
+		http.Error(w, "fermentation engine not running", http.StatusServiceUnavailable)
+		return
+	}
+
+	s.engine.SetGlycolMode(req.Mode)
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{"status": "ok"})
+}
+
+func (s *Server) handleSetGlycolPump(w http.ResponseWriter, r *http.Request) {
+	var req fermentation.GlycolControlRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "invalid JSON", http.StatusBadRequest)
+		return
+	}
+
+	if s.engine == nil {
+		http.Error(w, "fermentation engine not running", http.StatusServiceUnavailable)
+		return
+	}
+
+	s.engine.SetGlycolPump(req.On)
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{"status": "ok"})
 }

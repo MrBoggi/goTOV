@@ -137,6 +137,16 @@ type GlycolStatus struct {
 	Pressure       *float64            `json:"pressure"`
 	LoadPercentage float64             `json:"loadPercentage"`
 	Trend24h       []GlycolHistoryData `json:"trend24h"`
+	Mode           string              `json:"mode"`           // "Auto" or "Manual"
+	ManualPumpOn   bool                `json:"manualPumpOn"`   // Current manual desired state
+}
+
+type GlycolModeRequest struct {
+	Mode string `json:"mode"`
+}
+
+type GlycolControlRequest struct {
+	On bool `json:"on"`
 }
 
 // GlycolHistoryData er et enkelt datapunkt for glykol trendgrafer
@@ -145,4 +155,10 @@ type GlycolHistoryData struct {
 	Value     float64    `db:"temperature" json:"value"` // Exposed as "value" in API trend for graphs
 	Pressure  *float64   `db:"pressure" json:"-"`
 	LoadPct   float64    `db:"load_percentage" json:"-"`
+}
+
+// ManualControlRequest representerer en forespørsel om å sette manuell styring av kjøleren.
+type ManualControlRequest struct {
+	ID      int64 `json:"id"`
+	Cooling bool  `json:"cooling"`
 }

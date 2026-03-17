@@ -248,6 +248,41 @@ func (s *Server) handleSetFermentationMode(w http.ResponseWriter, r *http.Reques
 	_ = json.NewEncoder(w).Encode(map[string]interface{}{"status": "ok"})
 }
 
+func (s *Server) handleSetManualControl(w http.ResponseWriter, r *http.Request) {
+	idStr := chi.URLParam(r, "id")
+	id, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil {
+		http.Error(w, "invalid ID format", http.StatusBadRequest)
+		return
+	}
+
+	var req fermentation.ManualControlRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		s.log.Error().Err(err).Msg("failed to decode manual control request")
+		http.Error(w, "invalid JSON", http.StatusBadRequest)
+		return
+	}
+
+	if s.engine == nil {
+		http.Error(w, "fermentation engine not running", http.StatusServiceUnavailable)
+		return
+	}
+
+	if err := s.engine.SetManualControl(id, req.Cooling); err != nil {
+		if errors.Is(err, fermentation.ErrFermentationNotFound) {
+			http.Error(w, "active fermentation not found", http.StatusNotFound)
+			return
+		}
+		s.log.Error().Err(err).Int64("id", id).Msg("failed to set manual control")
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{"status": "ok"})
+}
+
 func (s *Server) handleUpdateActiveFermentationStep(w http.ResponseWriter, r *http.Request) {
 	idStr := chi.URLParam(r, "id")
 	id, err := strconv.ParseInt(idStr, 10, 64)

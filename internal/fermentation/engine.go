@@ -36,6 +36,10 @@ type Engine struct {
 	actualValves      map[string]bool // tankID -> bool
 	actualPump        bool
 	pumpTransitioning bool
+
+	// Glycol Mode (Auto/Manual)
+	glycolMode   string // "Auto" or "Manual"
+	manualPumpOn bool
 }
 
 func NewEngine(store FermentationStore, client *opcua.Client, log zerolog.Logger) *Engine {
@@ -49,6 +53,8 @@ func NewEngine(store FermentationStore, client *opcua.Client, log zerolog.Logger
 		lastWritten:       make(map[string]interface{}),
 		desiredValves:     make(map[string]bool),
 		actualValves:      make(map[string]bool),
+		glycolMode:        "Auto",
+		manualPumpOn:      false,
 	}
 }
 
@@ -209,6 +215,52 @@ func (e *Engine) GetActiveStates() []FermentationState {
 	return states
 }
 
+// SetGlycolMode switches between Auto and Manual pump orchestration.
+func (e *Engine) SetGlycolMode(mode string) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	if mode == "Auto" || mode == "Manual" {
+		e.glycolMode = mode
+		e.log.Info().Str("mode", mode).Msg("🔌 Glycol mode updated")
+	}
+}
+
+// SetGlycolPump manually sets the pump state (only has effect in Manual mode).
+func (e *Engine) SetGlycolPump(on bool) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.manualPumpOn = on
+	e.log.Info().Bool("on", on).Msg("🔌 Manual glycol pump state updated")
+}
+
+// SetManualControl handles manual cooler overrides when in Manual mode.
+func (e *Engine) SetManualControl(id int64, cooling bool) error {
+	e.mu.Lock()
+	state, ok := e.active[id]
+	if !ok {
+		e.mu.Unlock()
+		return ErrFermentationNotFound
+	}
+	if state.Mode != "Manual" {
+		e.mu.Unlock()
+		return fmt.Errorf("manual control is only allowed in Manual mode (current: %s)", state.Mode)
+	}
+	e.mu.Unlock()
+
+	e.log.Info().
+		Int64("id", id).
+		Str("tank", state.TankID).
+		Bool("cooling", cooling).
+		Msg("🕹️ Manual cooler override received")
+
+	// Apply hardware changes for cooling only via desiredValves
+	e.seqMu.Lock()
+	e.desiredValves[state.TankID] = cooling
+	e.seqMu.Unlock()
+
+	return nil
+}
+
 func (e *Engine) StopFermentation(id int64) error {
 	e.mu.Lock()
 	state, ok := e.active[id]
@@ -351,7 +403,20 @@ func (e *Engine) orchestrateGlycol(anyCoolingDesired bool) {
 	// 2. Handle Pump Sequence
 	pumpTag := "ns=4;s=MAIN.fbUA.glykolkjolerPumpe"
 
-	if anyCoolingDesired && !e.actualPump && !e.pumpTransitioning {
+	// Determine pump demand
+	e.mu.RLock()
+	mode := e.glycolMode
+	manualOn := e.manualPumpOn
+	e.mu.RUnlock()
+
+	var pumpDemand bool
+	if mode == "Manual" {
+		pumpDemand = manualOn
+	} else {
+		pumpDemand = anyCoolingDesired
+	}
+
+	if pumpDemand && !e.actualPump && !e.pumpTransitioning {
 		// START SEQUENCE: Valve is already open (step 1), wait 1s then start pump
 		e.pumpTransitioning = true
 		e.log.Info().Msg("⏳ Cooling requested: Waiting 1s for valves to settle before starting pump")
@@ -368,7 +433,7 @@ func (e *Engine) orchestrateGlycol(anyCoolingDesired bool) {
 			e.pumpTransitioning = false
 			e.log.Info().Msg("🚀 Glycol pump STARTED")
 		})
-	} else if !anyCoolingDesired && e.actualPump && !e.pumpTransitioning {
+	} else if !pumpDemand && e.actualPump && !e.pumpTransitioning {
 		// STOP SEQUENCE: Stop pump, wait 1s, then close all valves
 		e.pumpTransitioning = true
 		e.log.Info().Msg("⏳ Stopping cooling: Stopping pump first")
@@ -532,6 +597,13 @@ func (e *Engine) GetGlycolLoad() float64 {
 	return e.currentGlycolLoad
 }
 
+// GetGlycolSettings returns current mode and manual pump state.
+func (e *Engine) GetGlycolSettings() (string, bool) {
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+	return e.glycolMode, e.manualPumpOn
+}
+
 func (e *Engine) processOne(state *FermentationState) (bool, error) {
 	// 1. Get current active steps
 	steps, err := e.store.GetActiveSteps(state.ID)
@@ -649,41 +721,20 @@ func (e *Engine) processOne(state *FermentationState) (bool, error) {
 		jacketTag := fmt.Sprintf("ns=4;s=MAIN.fbUA.fermenter%sVarmekappe", state.TankID)
 
 		if state.Mode == "Manual" {
-			// MANUAL MODE: Do not touch hardware, but read state to log and orchestrate glycol pump
-			val, err := e.client.ReadNodeValue(ctx, valveTag)
-			if err == nil {
-				if b, ok := val.(bool); ok {
-					coolingActive = b
-					// Sync to engine so pump logic knows cooling is demanded
-					e.seqMu.Lock()
-					e.desiredValves[state.TankID] = b
-					e.actualValves[state.TankID] = b
-					e.seqMu.Unlock()
+			// MANUAL MODE: Use desired state set by API for pump orchestration
+			e.seqMu.Lock()
+			coolingActive = e.desiredValves[state.TankID]
+			e.seqMu.Unlock()
 
-					e.mu.Lock()
-					e.lastWritten[valveTag] = b
-					e.mu.Unlock()
-				}
-			}
-
-			heatingActive := false
-			valH, errH := e.client.ReadNodeValue(ctx, jacketTag)
-			if errH == nil {
-				if b, ok := valH.(bool); ok {
-					heatingActive = b
-					e.mu.Lock()
-					e.lastWritten[jacketTag] = b
-					e.mu.Unlock()
-				}
-			}
-
+			// Read current temp for logging (heating remains 0/false for cooler manual control)
+			heatingActive := false 
+			
 			e.log.Debug().
 				Str("tank", state.TankID).
 				Float32("current", currentTemp).
 				Float32("target", target).
 				Bool("cooling", coolingActive).
-				Bool("heating", heatingActive).
-				Msg("🌡️ Mode is Manual - skipping hardware control")
+				Msg("🌡️ Mode is Manual - using desired cooling state")
 
 			// Log to history
 			if err := e.store.LogData(state.ID, state.PlanID, state.TankID, state.BatchID, currentTemp, target, coolingActive, heatingActive); err != nil {
