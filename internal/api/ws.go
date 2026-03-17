@@ -215,6 +215,7 @@ func (s *Server) Router() http.Handler {
 	r.Post("/api/fermentation/stop", s.handleStopFermentation)
 	r.Post("/api/fermentation/event/complete", s.handleCompleteFermentationEvent)
 	r.Post("/api/fermentation/mode", s.handleSetFermentationMode)
+	r.Post("/api/fermentation/active/{id}/manual", s.handleSetManualControl)
 	r.Put("/api/fermentation/active/{id}/step", s.handleUpdateActiveFermentationStep)
 	r.Get("/api/fermentation/status", s.handleGetFermentationStatus)
 	r.Get("/api/fermentation/history/{id}", s.handleGetFermentationHistory)
@@ -223,6 +224,8 @@ func (s *Server) Router() http.Handler {
 	r.Delete("/api/fermentation/plan/{id}", s.handleDeleteFermentationPlan)
 	r.Get("/api/tanks", s.handleListTanks)
 	r.Get("/api/glycol/status", s.handleGetGlycolStatus)
+	r.Post("/api/glycol/mode", s.handleSetGlycolMode)
+	r.Post("/api/glycol/control", s.handleSetGlycolPump)
 	r.Get("/api/brewhouse/state", s.handleGetBrewhouseState)
 	r.Post("/api/brewhouse/state", s.handleUpdateBrewhouseState)
 
