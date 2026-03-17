@@ -137,8 +137,8 @@ type GlycolStatus struct {
 	Pressure       *float64            `json:"pressure"`
 	LoadPercentage float64             `json:"loadPercentage"`
 	Trend24h       []GlycolHistoryData `json:"trend24h"`
-	Mode           string              `json:"mode"`           // "Auto" or "Manual"
-	ManualPumpOn   bool                `json:"manualPumpOn"`   // Current manual desired state
+	Mode           string              `json:"mode"`         // "Auto" or "Manual"
+	ManualPumpOn   bool                `json:"manualPumpOn"` // Current manual desired state
 }
 
 type GlycolModeRequest struct {

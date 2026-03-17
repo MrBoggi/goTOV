@@ -727,8 +727,8 @@ func (e *Engine) processOne(state *FermentationState) (bool, error) {
 			e.seqMu.Unlock()
 
 			// Read current temp for logging (heating remains 0/false for cooler manual control)
-			heatingActive := false 
-			
+			heatingActive := false
+
 			e.log.Debug().
 				Str("tank", state.TankID).
 				Float32("current", currentTemp).
