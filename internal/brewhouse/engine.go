@@ -350,10 +350,8 @@ func (e *Engine) writeToUA(ctx context.Context) {
 
 		last, ok := e.lastWritten[tag]
 		if ok && last == val {
-			return // Return early here as heaters are usually at the end
-		}
-
-		if err := e.client.WriteTag(ctx, tag, val); err == nil {
+			e.log.Debug().Str("tag", tag).Msg("skipping unchanged BK heater command")
+		} else if err := e.client.WriteTag(ctx, tag, val); err == nil {
 			e.lastWritten[tag] = val
 		}
 	}
@@ -365,10 +363,8 @@ func (e *Engine) writeToUA(ctx context.Context) {
 
 		last, ok := e.lastWritten[tag]
 		if ok && last == val {
-			return
-		}
-
-		if err := e.client.WriteTag(ctx, tag, val); err == nil {
+			e.log.Debug().Str("tag", tag).Msg("skipping unchanged MLT heater command")
+		} else if err := e.client.WriteTag(ctx, tag, val); err == nil {
 			e.lastWritten[tag] = val
 		}
 	}

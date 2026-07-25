@@ -161,6 +161,12 @@ func RunServer(log zerolog.Logger) error {
 	<-stop
 	log.Info().Msg("🛑 Shutting down gracefully...")
 	cancel()
+
+	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 10*time.Second)
+	if err := apiServer.Shutdown(shutdownCtx); err != nil {
+		log.Error().Err(err).Msg("🌐 HTTP/WS server shutdown failed")
+	}
+	shutdownCancel()
 	wg.Wait() // vent for alle goroutines
 	log.Info().Msg("👋 goTØV backend stopped cleanly")
 

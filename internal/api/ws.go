@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"sync"
@@ -48,6 +49,9 @@ type Server struct {
 	latest   map[string]WSMessage
 
 	upgrader websocket.Upgrader
+
+	httpServerMu sync.RWMutex
+	httpServer   *http.Server
 }
 
 type WSMessage struct {
@@ -247,10 +251,38 @@ func (s *Server) Router() http.Handler {
 	return r
 }
 
-// Start the HTTP server (blocking)
+// Start the HTTP server (blocking).
 func (s *Server) Start(addr string) error {
 	s.log.Info().Str("addr", addr).Msg("🌐 HTTP/WS server starting")
-	return http.ListenAndServe(addr, s.Router())
+
+	server := &http.Server{
+		Addr:              addr,
+		Handler:           s.Router(),
+		ReadHeaderTimeout: 5 * time.Second,
+		IdleTimeout:       60 * time.Second,
+	}
+
+	s.httpServerMu.Lock()
+	s.httpServer = server
+	s.httpServerMu.Unlock()
+
+	err := server.ListenAndServe()
+	if errors.Is(err, http.ErrServerClosed) {
+		return nil
+	}
+	return err
+}
+
+// Shutdown stops the HTTP server and waits for in-flight HTTP requests.
+func (s *Server) Shutdown(ctx context.Context) error {
+	s.httpServerMu.RLock()
+	server := s.httpServer
+	s.httpServerMu.RUnlock()
+
+	if server == nil {
+		return nil
+	}
+	return server.Shutdown(ctx)
 }
 
 // --- Internal logic ---

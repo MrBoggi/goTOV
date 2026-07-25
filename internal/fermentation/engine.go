@@ -267,6 +267,7 @@ func (e *Engine) StopFermentation(id int64) error {
 	if ok {
 		delete(e.active, id)
 	}
+	activeCount := len(e.active)
 	e.mu.Unlock()
 
 	if !ok {
@@ -283,11 +284,7 @@ func (e *Engine) StopFermentation(id int64) error {
 		// Turn off all hardware for this tank
 		e.setTankHardware(state.TankID, false, false)
 
-		// Glycol Pump Interlock: Only run if at least one valve is open
-		// A simple check: if no more active fermentations in engine, stop pump
-		activeCount := len(e.active)
-		e.mu.RUnlock()
-
+		// Glycol Pump Interlock: stop the pump when no fermentations remain.
 		if activeCount == 0 && e.client != nil {
 			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 			defer cancel()

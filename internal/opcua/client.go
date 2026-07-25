@@ -74,7 +74,7 @@ func NewClient(endpoint, username, password string, log zerolog.Logger) (*Client
 
 	// --- Add authentication ---
 	if username != "" {
-		log.Info().Msgf("🔐 Using username authentication for OPC UA user '%s'", username)
+		log.Info().Msg("🔐 Using username authentication for OPC UA")
 		opts = append(opts, opcua.AuthUsername(username, password))
 	} else {
 		log.Info().Msg("🕶 Using anonymous authentication (no credentials)")
@@ -242,11 +242,17 @@ func (c *Client) WriteTag(ctx context.Context, nodeID string, value interface{})
 				AttributeID: ua.AttributeIDValue,
 				Value: &ua.DataValue{
 					EncodingMask: ua.DataValueValue,
-					Value:        ua.MustVariant(value),
+					Value:        nil,
 				},
 			},
 		},
 	}
+
+	variant, err := ua.NewVariant(value)
+	if err != nil {
+		return fmt.Errorf("create value variant: %w", err)
+	}
+	req.NodesToWrite[0].Value.Value = variant
 
 	var resp *ua.WriteResponse
 	for i := 0; i < 3; i++ { // Retry up to 3 times for session errors
