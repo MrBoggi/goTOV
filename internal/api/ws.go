@@ -1,11 +1,17 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"net/http"
 	"sync"
 	"time"
 
+	"github.com/MrBoggi/goTOV/internal/brew"
+	"github.com/MrBoggi/goTOV/internal/brewfather"
+	"github.com/MrBoggi/goTOV/internal/brewhouse"
 	"github.com/MrBoggi/goTOV/internal/fermentation"
 	"github.com/MrBoggi/goTOV/internal/opcua"
 	"github.com/MrBoggi/goTOV/internal/version"
@@ -15,20 +21,37 @@ import (
 	"github.com/rs/zerolog"
 )
 
+// Client represents a connected websocket client
+type Client struct {
+	server *Server
+	conn   *websocket.Conn
+	send   chan WSMessage
+}
+
 type Server struct {
 	log               zerolog.Logger
 	client            *opcua.Client
 	fermentationStore fermentation.FermentationStore
+	engine            *fermentation.Engine
+	brewhouseStore    brewhouse.Store
+	brewhouseEngine   *brewhouse.Engine
+	brewingEngine     *brew.Engine
+	brewfatherClient  *brewfather.Client
 
-	// Connected websocket clients
-	mu          sync.RWMutex
-	subscribers map[*websocket.Conn]bool
+	// Hub logic
+	clients      map[*Client]bool
+	broadcastCh  chan WSMessage
+	registerCh   chan *Client
+	unregisterCh chan *Client
 
 	// Latest known values for REST snapshot
 	latestMu sync.RWMutex
 	latest   map[string]WSMessage
 
 	upgrader websocket.Upgrader
+
+	httpServerMu sync.RWMutex
+	httpServer   *http.Server
 }
 
 type WSMessage struct {
@@ -40,12 +63,20 @@ type WSMessage struct {
 }
 
 // NewServer initializes the WS/HTTP server and listens for OPC UA updates
-func NewServer(log zerolog.Logger, client *opcua.Client, fermentationStore fermentation.FermentationStore) *Server {
+func NewServer(log zerolog.Logger, client *opcua.Client, fermentationStore fermentation.FermentationStore, engine *fermentation.Engine, brewhouseStore brewhouse.Store, brewhouseEngine *brewhouse.Engine, brewingEngine *brew.Engine, brewfatherClient *brewfather.Client) *Server {
 	s := &Server{
 		log:               log,
 		client:            client,
 		fermentationStore: fermentationStore,
-		subscribers:       make(map[*websocket.Conn]bool),
+		engine:            engine,
+		brewhouseStore:    brewhouseStore,
+		brewhouseEngine:   brewhouseEngine,
+		brewingEngine:     brewingEngine,
+		brewfatherClient:  brewfatherClient,
+		clients:           make(map[*Client]bool),
+		broadcastCh:       make(chan WSMessage, 256),
+		registerCh:        make(chan *Client),
+		unregisterCh:      make(chan *Client),
 		latest:            make(map[string]WSMessage),
 		upgrader: websocket.Upgrader{
 			ReadBufferSize:  1024,
@@ -54,10 +85,96 @@ func NewServer(log zerolog.Logger, client *opcua.Client, fermentationStore ferme
 		},
 	}
 
+	go s.runHub()
+
 	if s.client != nil {
 		go s.consumeUpdates()
+		go s.seedCache()
+	}
+	if s.brewhouseEngine != nil {
+		go s.broadcastBrewhouseState()
+	}
+	if s.brewingEngine != nil {
+		go s.broadcastBrewingStatus()
 	}
 	return s
+}
+
+func (s *Server) runHub() {
+	for {
+		select {
+		case client := <-s.registerCh:
+			s.clients[client] = true
+			s.log.Info().Int("count", len(s.clients)).Msg("💬 WS client connected")
+
+			// Send initial snapshot
+			s.latestMu.RLock()
+			for _, msg := range s.latest {
+				client.send <- msg
+			}
+			s.latestMu.RUnlock()
+
+		case client := <-s.unregisterCh:
+			if _, ok := s.clients[client]; ok {
+				delete(s.clients, client)
+				close(client.send)
+				s.log.Info().Int("count", len(s.clients)).Msg("🧹 WS client disconnected")
+			}
+
+		case message := <-s.broadcastCh:
+			for client := range s.clients {
+				select {
+				case client.send <- message:
+				default:
+					s.log.Warn().Msg("❌ WS client outbox full - dropping client")
+					close(client.send)
+					delete(s.clients, client)
+				}
+			}
+		}
+	}
+}
+
+func (s *Server) seedCache() {
+	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second) // Increased timeout
+	defer cancel()
+
+	s.log.Info().Msg("🌱 Waiting for OPC UA connection before seeding cache...")
+	if err := s.client.WaitForConnection(ctx); err != nil {
+		s.log.Error().Err(err).Msg("❌ Timeout waiting for OPC UA connection, skipping seed")
+		return
+	}
+
+	s.log.Info().Msg("🌱 Seeding WebSocket cache from PLC...")
+
+	nodes, err := s.client.ListSymbols(ctx)
+	if err != nil {
+		s.log.Error().Err(err).Msg("❌ Failed to list PLC symbols for seeding")
+		return
+	}
+
+	for _, nodeID := range nodes {
+		val, err := s.client.ReadNodeValue(ctx, nodeID.String())
+		if err != nil {
+			s.log.Warn().Err(err).Msgf("⚠️ Seed failed for %s", nodeID.String())
+			continue
+		}
+
+		msg := WSMessage{
+			Tag:         nodeID.String(),
+			DisplayName: s.client.GetDisplayName(nodeID.String()),
+			Value:       val,
+			ValueType:   fmt.Sprintf("%T", val),
+			Timestamp:   time.Now().UnixMilli(),
+		}
+
+		s.latestMu.Lock()
+		s.latest[msg.Tag] = msg
+		s.latestMu.Unlock()
+
+		s.log.Info().Msgf("🔄 Seeded %s = %v", msg.Tag, val)
+	}
+	s.log.Info().Msg("✅ WebSocket cache seeding complete")
 }
 
 func (s *Server) Router() http.Handler {
@@ -65,7 +182,7 @@ func (s *Server) Router() http.Handler {
 
 	r.Use(cors.Handler(cors.Options{
 		AllowedOrigins:   []string{"*"},
-		AllowedMethods:   []string{"GET", "POST", "OPTIONS"},
+		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
 		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-CSRF-Token"},
 		AllowCredentials: false,
 		MaxAge:           300,
@@ -95,9 +212,35 @@ func (s *Server) Router() http.Handler {
 	r.Get("/api/tags", s.handleSnapshot)
 	r.Post("/api/write", s.handleWrite)
 	r.Post("/api/fermentation/plan", s.handleSaveFermentationPlan)
+	r.Put("/api/fermentation/plan/{id}", s.handleUpdateFermentationPlan)
+	r.Get("/api/fermentation/plan", s.handleListFermentationPlans) // Alias for plural
 	r.Get("/api/fermentation/plans", s.handleListFermentationPlans)
 	r.Post("/api/fermentation/start", s.handleStartFermentation)
+	r.Post("/api/fermentation/stop", s.handleStopFermentation)
+	r.Post("/api/fermentation/event/complete", s.handleCompleteFermentationEvent)
+	r.Post("/api/fermentation/mode", s.handleSetFermentationMode)
+	r.Post("/api/fermentation/active/{id}/manual", s.handleSetManualControl)
+	r.Put("/api/fermentation/active/{id}/step", s.handleUpdateActiveFermentationStep)
+	r.Get("/api/fermentation/status", s.handleGetFermentationStatus)
+	r.Get("/api/fermentation/history/{id}", s.handleGetFermentationHistory)
+	r.Get("/api/fermentation/docs", s.handleGetApiDocs)
+	r.Get("/api/docs", s.handleGetApiDocs)
+	r.Delete("/api/fermentation/plan/{id}", s.handleDeleteFermentationPlan)
 	r.Get("/api/tanks", s.handleListTanks)
+	r.Get("/api/glycol/status", s.handleGetGlycolStatus)
+	r.Post("/api/glycol/mode", s.handleSetGlycolMode)
+	r.Post("/api/glycol/control", s.handleSetGlycolPump)
+	r.Get("/api/brewhouse/state", s.handleGetBrewhouseState)
+	r.Post("/api/brewhouse/state", s.handleUpdateBrewhouseState)
+
+	// Brewing process
+	r.Get("/api/brewfather/batches", s.handleListBrewfatherBatches)
+	r.Post("/api/brewing/start", s.handleStartBrewing)
+	// Fixed: Let's use handleStopBrewing
+	r.Post("/api/brewing/stop", s.handleStopBrewing)
+	r.Get("/api/brewing/status", s.handleGetBrewingStatus)
+	r.Post("/api/brewing/config/pid", s.handleSavePIDConfig)
+	r.Get("/api/brewing/history", s.handleGetBrewingHistory)
 
 	// ----------------------------------------------------
 	// STATIC FILES (INGENTING annet fjernes eller endres)
@@ -108,10 +251,38 @@ func (s *Server) Router() http.Handler {
 	return r
 }
 
-// Start the HTTP server (blocking)
+// Start the HTTP server (blocking).
 func (s *Server) Start(addr string) error {
 	s.log.Info().Str("addr", addr).Msg("🌐 HTTP/WS server starting")
-	return http.ListenAndServe(addr, s.Router())
+
+	server := &http.Server{
+		Addr:              addr,
+		Handler:           s.Router(),
+		ReadHeaderTimeout: 5 * time.Second,
+		IdleTimeout:       60 * time.Second,
+	}
+
+	s.httpServerMu.Lock()
+	s.httpServer = server
+	s.httpServerMu.Unlock()
+
+	err := server.ListenAndServe()
+	if errors.Is(err, http.ErrServerClosed) {
+		return nil
+	}
+	return err
+}
+
+// Shutdown stops the HTTP server and waits for in-flight HTTP requests.
+func (s *Server) Shutdown(ctx context.Context) error {
+	s.httpServerMu.RLock()
+	server := s.httpServer
+	s.httpServerMu.RUnlock()
+
+	if server == nil {
+		return nil
+	}
+	return server.Shutdown(ctx)
 }
 
 // --- Internal logic ---
@@ -123,19 +294,18 @@ func (s *Server) handleWS(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	s.mu.Lock()
-	s.subscribers[conn] = true
-	s.mu.Unlock()
-	s.log.Info().Msg("💬 WS client connected")
-
-	// Send initial snapshot
-	s.latestMu.RLock()
-	for _, msg := range s.latest {
-		_ = conn.WriteJSON(msg)
+	client := &Client{
+		server: s,
+		conn:   conn,
+		send:   make(chan WSMessage, 256),
 	}
-	s.latestMu.RUnlock()
+	s.registerCh <- client
+	s.log.Info().Str("remote", conn.RemoteAddr().String()).Msg("💬 WS client connected")
 
-	// Setup ping handler
+	// Start write pump in a separate goroutine
+	go client.writePump()
+
+	// Read loop (to detect disconnection and handle pongs)
 	conn.SetReadLimit(1024)
 	_ = conn.SetReadDeadline(time.Now().Add(60 * time.Second))
 	conn.SetPongHandler(func(string) error {
@@ -143,29 +313,43 @@ func (s *Server) handleWS(w http.ResponseWriter, r *http.Request) {
 		return nil
 	})
 
-	go s.keepAlive(conn)
-
-	// Block until client closes
 	for {
 		if _, _, err := conn.ReadMessage(); err != nil {
 			break
 		}
 	}
 
-	// Remove client
-	s.mu.Lock()
-	delete(s.subscribers, conn)
-	s.mu.Unlock()
+	s.unregisterCh <- client
 	_ = conn.Close()
-	s.log.Info().Msg("🧹 WS client disconnected")
 }
 
-func (s *Server) keepAlive(conn *websocket.Conn) {
+func (client *Client) writePump() {
 	ticker := time.NewTicker(30 * time.Second)
-	defer ticker.Stop()
-	for range ticker.C {
-		if err := conn.WriteControl(websocket.PingMessage, []byte("ping"), time.Now().Add(5*time.Second)); err != nil {
-			return
+	defer func() {
+		ticker.Stop()
+		_ = client.conn.Close()
+	}()
+
+	for {
+		select {
+		case message, ok := <-client.send:
+			_ = client.conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
+			if !ok {
+				// The hub closed the channel
+				_ = client.conn.WriteMessage(websocket.CloseMessage, []byte{})
+				return
+			}
+
+			if err := client.conn.WriteJSON(message); err != nil {
+				client.server.log.Warn().Err(err).Msg("❌ WS write failed")
+				return
+			}
+
+		case <-ticker.C:
+			_ = client.conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
+			if err := client.conn.WriteMessage(websocket.PingMessage, nil); err != nil {
+				return
+			}
 		}
 	}
 }
@@ -185,33 +369,23 @@ func (s *Server) consumeUpdates() {
 			Tag:         ev.Name,
 			Value:       ev.Value,
 			ValueType:   ev.Type,
-			DisplayName: ev.DisplayName, // 👈 legg til dette
+			DisplayName: ev.DisplayName,
 			Timestamp:   time.Now().UnixMilli(),
 		}
 
-		// oppdater cache
+		// update cache
 		s.latestMu.Lock()
 		s.latest[ev.Name] = msg
 		s.latestMu.Unlock()
 
-		s.broadcast(msg)
+		s.broadcastMessage(msg)
 	}
 }
 
-func (s *Server) broadcast(msg WSMessage) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
+func (s *Server) broadcastMessage(msg WSMessage) {
+	s.broadcastCh <- msg
+}
 
-	for conn := range s.subscribers {
-		_ = conn.SetWriteDeadline(time.Now().Add(2 * time.Second))
-		if err := conn.WriteJSON(msg); err != nil {
-			s.mu.RUnlock()
-			s.mu.Lock()
-			delete(s.subscribers, conn)
-			s.mu.Unlock()
-			s.mu.RLock()
-			_ = conn.Close()
-			s.log.Warn().Err(err).Msg("❌ WS write failed — client removed")
-		}
-	}
+func (s *Server) broadcast(msg WSMessage) {
+	s.broadcastMessage(msg)
 }

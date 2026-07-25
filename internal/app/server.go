@@ -6,8 +6,12 @@ import (
 	"os/signal"
 	"sync"
 	"syscall"
+	"time"
 
 	"github.com/MrBoggi/goTOV/internal/api"
+	"github.com/MrBoggi/goTOV/internal/brew"
+	"github.com/MrBoggi/goTOV/internal/brewfather"
+	"github.com/MrBoggi/goTOV/internal/brewhouse"
 	"github.com/MrBoggi/goTOV/internal/config"
 	"github.com/MrBoggi/goTOV/internal/fermentation"
 	"github.com/MrBoggi/goTOV/internal/opcua"
@@ -43,23 +47,9 @@ func RunServer(log zerolog.Logger) error {
 		log.Info().Msg("🔌 OPC UA client closed")
 	}()
 
-	if err := client.Connect(); err != nil {
-		log.Error().Err(err).Msg("❌ Failed to connect to OPC UA server")
-		return err
-	}
-	log.Info().Msg("✅ Connected to Beckhoff PLC via OPC UA")
-
 	// --- Context for subs ---
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-
-	// --- List symbols / nodes ---
-	nodes, err := client.ListSymbols(ctx)
-	if err != nil {
-		log.Error().Err(err).Msg("❌ Failed to list PLC symbols")
-		return err
-	}
-	log.Info().Msgf("🧭 Found %d symbols manually", len(nodes))
 
 	// --- Waitgroup for graceful shutdown ---
 	var wg sync.WaitGroup
@@ -75,8 +65,44 @@ func RunServer(log zerolog.Logger) error {
 		log.Info().Msg("📂 Fermentation store closed")
 	}()
 
+	// --- Fermentation engine ---
+	engine := fermentation.NewEngine(fermentationStore, client, log)
+	engine.Start()
+	defer engine.Stop()
+
+	// --- Brewhouse start ---
+	var brewhouseStore brewhouse.Store
+	var brewhouseEngine *brewhouse.Engine
+	if cfg.Brewhouse.Enabled {
+		bs, err := brewhouse.NewSQLiteStore(cfg.Brewhouse.DatabasePath)
+		if err != nil {
+			log.Error().Err(err).Msg("❌ Failed to create brewhouse store")
+			return err
+		}
+		defer func() {
+			_ = bs.Close()
+			log.Info().Msg("📂 Brewhouse store closed")
+		}()
+		brewhouseStore = bs
+
+		brewhouseEngine = brewhouse.NewEngine(brewhouseStore, client, log)
+		brewhouseEngine.Start()
+		defer brewhouseEngine.Stop()
+	}
+
+	// --- Brewing engine ---
+	brewingEngine := brew.NewEngine()
+
+	// --- Brewfather client for API proxy ---
+	var bfClient *brewfather.Client
+	if cfg.Brewfather.UserID != "" && cfg.Brewfather.APIKey != "" {
+		bfClient = brewfather.NewClient(cfg.Brewfather.UserID, cfg.Brewfather.APIKey)
+		log.Info().Msg("✅ Brewfather API client initialized")
+	}
+
 	// --- Start HTTP/WS API server ---
-	apiServer := api.NewServer(log, client, fermentationStore)
+	// Vi starter denne FØR vi kobler til PLS slik at frontenden alltid kan laste.
+	apiServer := api.NewServer(log, client, fermentationStore, engine, brewhouseStore, brewhouseEngine, brewingEngine, bfClient)
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
@@ -86,13 +112,45 @@ func RunServer(log zerolog.Logger) error {
 		}
 	}()
 
-	// --- Start subscription ---
+	// --- Start OPC UA connection and subscription in background ---
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		if err := client.SubscribeAll(ctx, nodes); err != nil {
-			log.Error().Err(err).Msg("❌ Subscription failed")
-			cancel()
+
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			default:
+			}
+
+			log.Info().Msg("🔌 Attempting to connect to OPC UA server...")
+			if err := client.Connect(); err != nil {
+				log.Warn().Err(err).Msg("⚠️ Failed to connect to OPC UA server, retrying in 5s...")
+				time.Sleep(5 * time.Second)
+				continue
+			}
+			log.Info().Msg("✅ Connected to Beckhoff PLC via OPC UA")
+
+			// --- List symbols / nodes ---
+			nodes, err := client.ListSymbols(ctx)
+			if err != nil {
+				log.Error().Err(err).Msg("❌ Failed to list PLC symbols, retrying...")
+				_ = client.Close()
+				time.Sleep(5 * time.Second)
+				continue
+			}
+			log.Info().Msgf("🧭 Found %d symbols manually", len(nodes))
+
+			// --- Start subscription ---
+			// SubscribeAll blokkerer til context kanselleres eller tilkobling feiler
+			if err := client.SubscribeAll(ctx, nodes); err != nil {
+				log.Error().Err(err).Msg("❌ Subscription failed or connection lost, retrying in 5s...")
+				_ = client.Close()
+				time.Sleep(5 * time.Second)
+				continue
+			}
+			return // Normal exit when ctx cancelled
 		}
 	}()
 
@@ -103,6 +161,12 @@ func RunServer(log zerolog.Logger) error {
 	<-stop
 	log.Info().Msg("🛑 Shutting down gracefully...")
 	cancel()
+
+	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 10*time.Second)
+	if err := apiServer.Shutdown(shutdownCtx); err != nil {
+		log.Error().Err(err).Msg("🌐 HTTP/WS server shutdown failed")
+	}
+	shutdownCancel()
 	wg.Wait() // vent for alle goroutines
 	log.Info().Msg("👋 goTØV backend stopped cleanly")
 

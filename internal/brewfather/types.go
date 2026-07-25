@@ -1,5 +1,22 @@
 package brewfather
 
+// MashStep represents a single mash step in a recipe.
+type MashStep struct {
+	Name     string  `json:"name"`
+	Type     string  `json:"type"`
+	StepTemp float64 `json:"stepTemp"`
+	StepTime float64 `json:"stepTime"` // minutes
+	RampTime float64 `json:"rampTime"` // minutes
+}
+
+// BoilStep represents an addition during the boil (hops, etc).
+type BoilStep struct {
+	Name        string  `json:"name"`
+	Type        string  `json:"type"`
+	Time        float64 `json:"time"` // minutes
+	Description string  `json:"description"`
+}
+
 // FermentationStep is how Brewfather represents a single fermentation step.
 // We support both the "old" style (time/temperature/timeUnit) and the
 // recipe-snapshot style (stepTemp/stepTime).
@@ -27,6 +44,12 @@ type BrewfatherRecipe struct {
 	ID           string                 `json:"_id"`
 	Name         string                 `json:"name"`
 	Fermentation BrewfatherFermentation `json:"fermentation"`
+	Mash         struct {
+		Steps []MashStep `json:"steps"`
+	} `json:"mash"`
+	Boil struct {
+		Steps []BoilStep `json:"steps"`
+	} `json:"boil"`
 }
 
 // BrewfatherBatch represents a Brewfather batch.
