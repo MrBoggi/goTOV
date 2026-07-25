@@ -62,3 +62,12 @@ internal/**/data/
 #############################
 node_modules/
 dist/
+
+#############################
+# Graphify generated artifacts
+#############################
+graphify-out/cache/
+graphify-out/20??-??-??/
+graphify-out/.graphify_*
+graphify-out/GRAPH_REPORT.md
+graphify-out/graph.html
