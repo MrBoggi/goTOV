@@ -1,0 +1,683 @@
+{
+  "communities": {
+    "0": [
+      "api_client",
+      "api_client_writepump",
+      "api_server_broadcast",
+      "api_server_broadcastmessage",
+      "api_server_consumeupdates",
+      "api_server_handlesnapshot",
+      "api_server_handlews",
+      "api_server_router",
+      "api_server_runhub",
+      "api_server_seedcache",
+      "api_server_shutdown",
+      "api_server_start",
+      "api_wsmessage",
+      "conn",
+      "engine",
+      "handler",
+      "internal_api_ws",
+      "internal_api_ws_go_api_server",
+      "internal_api_ws_go_context",
+      "internal_api_ws_go_logger",
+      "internal_api_ws_go_request",
+      "internal_api_ws_go_responsewriter",
+      "internal_api_ws_go_rwmutex",
+      "internal_api_ws_newserver",
+      "internal_api_ws_test",
+      "internal_api_ws_test_go_t",
+      "internal_api_ws_test_testdeletefermentationplanendpoint",
+      "internal_api_ws_test_testhealthcheckendpoint",
+      "internal_api_ws_test_testlistfermentationplansendpoint",
+      "internal_api_ws_test_testlisttanksendpoint",
+      "internal_api_ws_test_testsavefermentationplanendpoint",
+      "internal_api_ws_test_teststartfermentationendpoint",
+      "internal_api_ws_test_testupdateactivefermentationstependpoint",
+      "internal_api_ws_test_testupdatefermentationplanendpoint",
+      "internal_logger_logger",
+      "internal_logger_logger_go_logger",
+      "internal_logger_logger_new",
+      "server",
+      "upgrader"
+    ],
+    "1": [
+      "brewhouse_actuatormode",
+      "brewhouse_analogactuator",
+      "brewhouse_brewhousestate",
+      "brewhouse_digitalactuator",
+      "brewhouse_engine_getstatesnapshot",
+      "brewhouse_historyentry",
+      "brewhouse_mockstore",
+      "brewhouse_mockstore_close",
+      "brewhouse_mockstore_getbrewingsession",
+      "brewhouse_mockstore_gethistory",
+      "brewhouse_mockstore_getpidconfig",
+      "brewhouse_mockstore_getstate",
+      "brewhouse_mockstore_logbrewingsession",
+      "brewhouse_mockstore_loghistory",
+      "brewhouse_mockstore_savebrewingsession",
+      "brewhouse_mockstore_savepidconfig",
+      "brewhouse_mockstore_savestate",
+      "brewhouse_pidconfig",
+      "brewhouse_sqlitestore",
+      "brewhouse_sqlitestore_close",
+      "brewhouse_sqlitestore_getbrewingsession",
+      "brewhouse_sqlitestore_gethistory",
+      "brewhouse_sqlitestore_getpidconfig",
+      "brewhouse_sqlitestore_getstate",
+      "brewhouse_sqlitestore_logbrewingsession",
+      "brewhouse_sqlitestore_loghistory",
+      "brewhouse_sqlitestore_migrate",
+      "brewhouse_sqlitestore_savebrewingsession",
+      "brewhouse_sqlitestore_savepidconfig",
+      "brewhouse_sqlitestore_savestate",
+      "internal_brewhouse_sqlite_store",
+      "internal_brewhouse_sqlite_store_go_db",
+      "internal_brewhouse_sqlite_store_go_time",
+      "internal_brewhouse_sqlite_store_newsqlitestore",
+      "internal_brewhouse_types"
+    ],
+    "2": [
+      "brewhouse_engine",
+      "brewhouse_engine_evaluate",
+      "brewhouse_engine_evaluateandwrite",
+      "brewhouse_engine_loghistory",
+      "brewhouse_engine_readsensors",
+      "brewhouse_engine_run",
+      "brewhouse_engine_sanitizestate",
+      "brewhouse_engine_start",
+      "brewhouse_engine_stop",
+      "brewhouse_engine_updatestate",
+      "brewhouse_engine_writetoua",
+      "brewhouse_pidcontroller",
+      "brewhouse_pidcontroller_calculate",
+      "brewhouse_pidcontroller_reset",
+      "brewhouse_store",
+      "internal_brewhouse_engine",
+      "internal_brewhouse_engine_go_client",
+      "internal_brewhouse_engine_go_context",
+      "internal_brewhouse_engine_go_logger",
+      "internal_brewhouse_engine_go_rwmutex",
+      "internal_brewhouse_engine_go_time",
+      "internal_brewhouse_engine_go_waitgroup",
+      "internal_brewhouse_engine_newengine",
+      "internal_brewhouse_engine_test",
+      "internal_brewhouse_engine_test_go_t",
+      "internal_brewhouse_engine_test_testautomanualtransition",
+      "internal_brewhouse_engine_test_testheaterinterlock",
+      "internal_brewhouse_engine_test_testheaterpid",
+      "internal_brewhouse_engine_test_testlevelcalculation",
+      "internal_brewhouse_pid",
+      "internal_brewhouse_pid_newpidcontroller",
+      "internal_brewhouse_pid_test",
+      "internal_brewhouse_pid_test_go_t",
+      "internal_brewhouse_pid_test_testpidcontroller",
+      "internal_brewhouse_types_initialstate"
+    ],
+    "3": [
+      "fermentation_engine",
+      "fermentation_engine_getglycolload",
+      "fermentation_engine_getglycolsettings",
+      "fermentation_engine_logglycol",
+      "fermentation_engine_orchestrateglycol",
+      "fermentation_engine_processall",
+      "fermentation_engine_processone",
+      "fermentation_engine_removefermentation",
+      "fermentation_engine_restore",
+      "fermentation_engine_run",
+      "fermentation_engine_setglycolmode",
+      "fermentation_engine_setglycolpump",
+      "fermentation_engine_setmanualcontrol",
+      "fermentation_engine_settankhardware",
+      "fermentation_engine_start",
+      "fermentation_engine_stop",
+      "fermentation_engine_stopbytank",
+      "fermentation_engine_stopfermentation",
+      "fermentation_engine_synchardwarestate",
+      "fermentation_engine_updateactivestep",
+      "fermentation_engine_updatefermentationmode",
+      "fermentation_engine_updatepumptracking",
+      "fermentation_fermentationstore",
+      "internal_fermentation_engine",
+      "internal_fermentation_engine_go_client",
+      "internal_fermentation_engine_go_context",
+      "internal_fermentation_engine_go_duration",
+      "internal_fermentation_engine_go_logger",
+      "internal_fermentation_engine_go_rwmutex",
+      "internal_fermentation_engine_go_time",
+      "internal_fermentation_engine_go_waitgroup",
+      "internal_fermentation_engine_newengine",
+      "internal_fermentation_store",
+      "mutex"
+    ],
+    "4": [
+      "brewfather_boilstep",
+      "brewfather_brewfatherbatch",
+      "brewfather_brewfatherfermentation",
+      "brewfather_brewfatherrecipe",
+      "brewfather_client_fetchbatch",
+      "brewfather_client_fetchbatches",
+      "brewfather_client_fetchrecipe",
+      "brewfather_fermentationstep",
+      "brewfather_mashstep",
+      "internal_brewfather_batches_go_brewfather_client",
+      "internal_brewfather_parser",
+      "internal_brewfather_parser_convertsteps",
+      "internal_brewfather_parser_extractboilplanfrombatch",
+      "internal_brewfather_parser_extractfermentationplan",
+      "internal_brewfather_parser_extractfermentationplanfrombatch",
+      "internal_brewfather_parser_extractfermentationplanfromrecipe",
+      "internal_brewfather_parser_extractmashplanfrombatch",
+      "internal_brewfather_parser_go_fermentationstep",
+      "internal_brewfather_recipes_go_brewfather_client",
+      "internal_brewfather_types"
+    ],
+    "5": [
+      "api_mockfermentationstore_getglycolhistory",
+      "api_mockfermentationstore_gethistory",
+      "fermentation_fermentationhistoryentry",
+      "fermentation_fermentationstep",
+      "fermentation_glycolcontrolrequest",
+      "fermentation_glycolhistorydata",
+      "fermentation_glycolmoderequest",
+      "fermentation_glycolstatus",
+      "fermentation_manualcontrolrequest",
+      "fermentation_sqlitestore_getglycolhistory",
+      "fermentation_sqlitestore_gethistory",
+      "fermentation_sqlitetime",
+      "fermentation_sqlitetime_scan",
+      "fermentation_sqlitetime_value",
+      "internal_fermentation_types",
+      "internal_fermentation_types_go_time",
+      "value"
+    ],
+    "6": [
+      "api_server_handlecompletefermentationevent",
+      "api_server_handledeletefermentationplan",
+      "api_server_handlegetapidocs",
+      "api_server_handlegetfermentationhistory",
+      "api_server_handlegetfermentationstatus",
+      "api_server_handlelistfermentationplans",
+      "api_server_handlelisttanks",
+      "api_server_handlesavefermentationplan",
+      "api_server_handlesetfermentationmode",
+      "api_server_handlesetmanualcontrol",
+      "api_server_handlestartfermentation",
+      "api_server_handlestopfermentation",
+      "api_server_handleupdateactivefermentationstep",
+      "api_server_handleupdatefermentationplan",
+      "internal_api_fermentation_go_api_server",
+      "internal_api_fermentation_go_request",
+      "internal_api_fermentation_go_responsewriter"
+    ],
+    "7": [
+      "fermentation_sqlitestore",
+      "fermentation_sqlitestore_clear",
+      "fermentation_sqlitestore_close",
+      "fermentation_sqlitestore_completeevent",
+      "fermentation_sqlitestore_deleteplan",
+      "fermentation_sqlitestore_getactivesteps",
+      "fermentation_sqlitestore_getevents",
+      "fermentation_sqlitestore_getsteps",
+      "fermentation_sqlitestore_listplans",
+      "fermentation_sqlitestore_liststeps",
+      "fermentation_sqlitestore_logdata",
+      "fermentation_sqlitestore_logglycoldata",
+      "fermentation_sqlitestore_startfermentation",
+      "fermentation_sqlitestore_stopfermentation",
+      "fermentation_sqlitestore_updateactivestep",
+      "internal_fermentation_sqlite_store_go_db",
+      "internal_fermentation_sqlite_store_go_fermentationstep"
+    ],
+    "8": [
+      "internal_opcua_client",
+      "internal_opcua_client_go_context",
+      "internal_opcua_client_go_logger",
+      "internal_opcua_client_go_opcua_client",
+      "internal_opcua_client_go_rwmutex",
+      "internal_opcua_client_newclient",
+      "opcua_client_close",
+      "opcua_client_connect",
+      "opcua_client_getdisplayname",
+      "opcua_client_isconnected",
+      "opcua_client_readnodevalue",
+      "opcua_client_setconnected",
+      "opcua_client_setdisplayname",
+      "opcua_client_waitforconnection",
+      "opcua_client_writetag",
+      "opcua_tagupdate"
+    ],
+    "9": [
+      "api_mockfermentationstore",
+      "api_mockfermentationstore_clear",
+      "api_mockfermentationstore_close",
+      "api_mockfermentationstore_completeevent",
+      "api_mockfermentationstore_deleteplan",
+      "api_mockfermentationstore_getactivesteps",
+      "api_mockfermentationstore_getsteps",
+      "api_mockfermentationstore_liststeps",
+      "api_mockfermentationstore_logdata",
+      "api_mockfermentationstore_logglycoldata",
+      "api_mockfermentationstore_startfermentation",
+      "api_mockfermentationstore_stopfermentation",
+      "api_mockfermentationstore_updateactivestep",
+      "internal_api_ws_test_go_fermentationstep"
+    ],
+    "10": [
+      "config_brewfatherconfig",
+      "config_brewhouseconfig",
+      "config_config",
+      "config_fermentationconfig",
+      "config_loggingconfig",
+      "config_opcuaconfig",
+      "config_serverconfig",
+      "internal_app_server",
+      "internal_app_server_go_logger",
+      "internal_app_server_runserver",
+      "internal_config_config",
+      "internal_config_config_load",
+      "internal_version_version",
+      "internal_version_version_get"
+    ],
+    "11": [
+      "api_mockfermentationstore_getstate",
+      "api_mockfermentationstore_getstatebytank",
+      "api_mockfermentationstore_listactivefermentations",
+      "api_mockfermentationstore_updatestate",
+      "fermentation_engine_addfermentation",
+      "fermentation_engine_getactivestates",
+      "fermentation_fermentationstate",
+      "fermentation_sqlitestore_getstate",
+      "fermentation_sqlitestore_getstatebytank",
+      "fermentation_sqlitestore_listactivefermentations",
+      "fermentation_sqlitestore_updatestate"
+    ],
+    "12": [
+      "api_server_broadcastbrewingstatus",
+      "api_server_handlegetbrewinghistory",
+      "api_server_handlegetbrewingstatus",
+      "api_server_handlelistbrewfatherbatches",
+      "api_server_handlesavepidconfig",
+      "api_server_handlestartbrewing",
+      "api_server_handlestopbrewing",
+      "internal_api_brewing_go_api_server",
+      "internal_api_brewing_go_request",
+      "internal_api_brewing_go_responsewriter"
+    ],
+    "13": [
+      "brew_brewingsession",
+      "brew_engine",
+      "brew_engine_getsession",
+      "brew_engine_startsession",
+      "brew_engine_stopsession",
+      "internal_brew_session",
+      "internal_brew_session_go_duration",
+      "internal_brew_session_go_rwmutex",
+      "internal_brew_session_go_time",
+      "internal_brew_session_newengine"
+    ],
+    "14": [
+      "api_mockfermentationstore_getplan",
+      "api_mockfermentationstore_listplans",
+      "api_mockfermentationstore_saveplan",
+      "api_mockfermentationstore_updateplan",
+      "fermentation_fermentationplan",
+      "fermentation_sqlitestore_getplan",
+      "fermentation_sqlitestore_saveplan",
+      "fermentation_sqlitestore_updateplan"
+    ],
+    "15": [
+      "fermentation_sqlitestore_migrate",
+      "internal_fermentation_sqlite_store",
+      "internal_fermentation_sqlite_store_newsqlitestore",
+      "internal_fermentation_sqlite_store_test",
+      "internal_fermentation_sqlite_store_test_go_t",
+      "internal_fermentation_sqlite_store_test_testsqlitestore_events",
+      "internal_fermentation_sqlite_store_test_testsqlitestore_historyfiltering",
+      "internal_fermentation_sqlite_store_test_testsqlitestore_planupdateandactivestepoverride"
+    ],
+    "16": [
+      "skills_skill_creator_scripts_init_skill",
+      "skills_skill_creator_scripts_init_skill_init_skill",
+      "skills_skill_creator_scripts_init_skill_main",
+      "skills_skill_creator_scripts_init_skill_rationale_119",
+      "skills_skill_creator_scripts_init_skill_rationale_190",
+      "skills_skill_creator_scripts_init_skill_rationale_195",
+      "skills_skill_creator_scripts_init_skill_title_case_skill_name"
+    ],
+    "17": [
+      "skills_skill_creator_scripts_package_skill",
+      "skills_skill_creator_scripts_package_skill_main",
+      "skills_skill_creator_scripts_package_skill_package_skill",
+      "skills_skill_creator_scripts_package_skill_rationale_20",
+      "skills_skill_creator_scripts_quick_validate",
+      "skills_skill_creator_scripts_quick_validate_rationale_13",
+      "skills_skill_creator_scripts_quick_validate_validate_skill"
+    ],
+    "18": [
+      "api_completefermentationeventrequest",
+      "api_setfermentationmoderequest",
+      "api_startfermentationrequest",
+      "api_stopfermentationrequest",
+      "api_updateactivesteprequest",
+      "internal_api_fermentation"
+    ],
+    "19": [
+      "api_server_broadcastbrewhousestate",
+      "api_server_handlegetbrewhousestate",
+      "api_server_handleupdatebrewhousestate",
+      "internal_api_brewhouse_go_api_server",
+      "internal_api_brewhouse_go_request",
+      "internal_api_brewhouse_go_responsewriter"
+    ],
+    "20": [
+      "api_server_handlegetglycolstatus",
+      "api_server_handlesetglycolmode",
+      "api_server_handlesetglycolpump",
+      "internal_api_glycol_go_api_server",
+      "internal_api_glycol_go_request",
+      "internal_api_glycol_go_responsewriter"
+    ],
+    "21": [
+      "api_mockfermentationstore_getactiveevents",
+      "api_mockfermentationstore_getevents",
+      "fermentation_activefermentationevent",
+      "fermentation_fermentationevent",
+      "fermentation_sqlitestore_getactiveevents"
+    ],
+    "22": [
+      "cmd_gotov_main",
+      "cmd_gotov_main_main",
+      "internal_cli_root",
+      "internal_cli_root_execute",
+      "internal_cli_root_init"
+    ],
+    "23": [
+      "api_server_handlewrite",
+      "internal_api_write_go_api_server",
+      "internal_api_write_go_request",
+      "internal_api_write_go_responsewriter"
+    ],
+    "24": [
+      "brewfather_client_listrecipes",
+      "brewfather_recipelistitem",
+      "internal_brewfather_list",
+      "internal_brewfather_list_go_brewfather_client"
+    ],
+    "25": [
+      "internal_opcua_nodes_go_context",
+      "internal_opcua_nodes_go_nodeid",
+      "internal_opcua_nodes_go_opcua_client",
+      "opcua_client_listsymbols"
+    ],
+    "26": [
+      "internal_opcua_subscribe_go_context",
+      "internal_opcua_subscribe_go_nodeid",
+      "internal_opcua_subscribe_go_opcua_client",
+      "opcua_client_subscribeall"
+    ],
+    "27": [
+      "api_pidconfigrequest",
+      "api_startbrewingrequest",
+      "internal_api_brewing"
+    ],
+    "28": [
+      "internal_brewfather_client",
+      "internal_brewfather_client_go_brewfather_client",
+      "internal_brewfather_client_newclient"
+    ],
+    "29": [
+      "internal_opcua_write_go_context",
+      "internal_opcua_write_go_opcua_client",
+      "opcua_client_writenodevalue"
+    ],
+    "30": [
+      "scripts_install_hooks",
+      "scripts_install_hooks_install_hook",
+      "scripts_install_hooks_sh__entry"
+    ],
+    "31": [
+      "api_writerequest",
+      "internal_api_write"
+    ],
+    "32": [
+      "examples_readanytype",
+      "examples_readanytype_main"
+    ],
+    "33": [
+      "internal_cli_brewfather_batches",
+      "internal_cli_brewfather_batches_init"
+    ],
+    "34": [
+      "internal_cli_brewfather_list",
+      "internal_cli_brewfather_list_init"
+    ],
+    "35": [
+      "internal_cli_fermentation",
+      "internal_cli_fermentation_init"
+    ],
+    "36": [
+      "internal_cli_fermentation_db",
+      "internal_cli_fermentation_db_init"
+    ],
+    "37": [
+      "internal_cli_server",
+      "internal_cli_server_init"
+    ],
+    "38": [
+      "scripts_docker_entrypoint",
+      "scripts_docker_entrypoint_sh__entry"
+    ],
+    "39": [
+      "scripts_hooks_pre_commit",
+      "scripts_hooks_pre_commit__entry"
+    ],
+    "40": [
+      "scripts_hooks_pre_merge",
+      "scripts_hooks_pre_merge__entry"
+    ],
+    "41": [
+      "scripts_hooks_pre_push",
+      "scripts_hooks_pre_push__entry"
+    ],
+    "42": [
+      "skills_release_manager_scripts_prepare_release",
+      "skills_release_manager_scripts_prepare_release_sh__entry"
+    ],
+    "43": [
+      "internal_api_brewhouse"
+    ],
+    "44": [
+      "internal_api_glycol"
+    ],
+    "45": [
+      "internal_brewfather_batches"
+    ],
+    "46": [
+      "internal_brewfather_recipes"
+    ],
+    "47": [
+      "internal_opcua_nodes"
+    ],
+    "48": [
+      "internal_opcua_subscribe"
+    ],
+    "49": [
+      "internal_opcua_write"
+    ],
+    "50": [
+      "pkg_github_com_mrboggi_gotov"
+    ],
+    "51": [
+      "skills_backend_development_scripts_create_migration"
+    ]
+  },
+  "cohesion": {
+    "0": 0.1039136302294197,
+    "1": 0.08739495798319327,
+    "2": 0.10588235294117647,
+    "3": 0.0873440285204991,
+    "4": 0.1736842105263158,
+    "5": 0.13970588235294118,
+    "6": 0.3088235294117647,
+    "7": 0.16911764705882354,
+    "8": 0.20833333333333334,
+    "9": 0.18681318681318682,
+    "10": 0.21978021978021978,
+    "11": 0.18181818181818182,
+    "12": 0.4222222222222222,
+    "13": 0.28888888888888886,
+    "14": 0.25,
+    "15": 0.39285714285714285,
+    "16": 0.38095238095238093,
+    "17": 0.42857142857142855,
+    "18": 0.3333333333333333,
+    "19": 0.4666666666666667,
+    "20": 0.6,
+    "21": 0.4,
+    "22": 0.4,
+    "23": 0.5,
+    "24": 0.5,
+    "25": 0.5,
+    "26": 0.5,
+    "27": 0.6666666666666666,
+    "28": 1.0,
+    "29": 0.6666666666666666,
+    "30": 1.0,
+    "31": 1.0,
+    "32": 1.0,
+    "33": 1.0,
+    "34": 1.0,
+    "35": 1.0,
+    "36": 1.0,
+    "37": 1.0,
+    "38": 1.0,
+    "39": 1.0,
+    "40": 1.0,
+    "41": 1.0,
+    "42": 1.0,
+    "43": 1.0,
+    "44": 1.0,
+    "45": 1.0,
+    "46": 1.0,
+    "47": 1.0,
+    "48": 1.0,
+    "49": 1.0,
+    "50": 1.0,
+    "51": 1.0
+  },
+  "gods": [
+    {
+      "id": "fermentation_engine",
+      "label": "Engine",
+      "degree": 34
+    },
+    {
+      "id": "api_mockfermentationstore",
+      "label": "MockFermentationStore",
+      "degree": 32
+    },
+    {
+      "id": "fermentation_sqlitestore",
+      "label": "SQLiteStore",
+      "degree": 28
+    },
+    {
+      "id": "brewhouse_engine",
+      "label": "Engine",
+      "degree": 21
+    },
+    {
+      "id": "internal_api_ws_go_api_server",
+      "label": "Server",
+      "degree": 20
+    },
+    {
+      "id": "internal_api_ws_newserver",
+      "label": "NewServer()",
+      "degree": 19
+    },
+    {
+      "id": "fermentation_fermentationstate",
+      "label": "FermentationState",
+      "degree": 16
+    },
+    {
+      "id": "fermentation_fermentationplan",
+      "label": "FermentationPlan",
+      "degree": 15
+    },
+    {
+      "id": "internal_api_fermentation_go_api_server",
+      "label": "Server",
+      "degree": 14
+    },
+    {
+      "id": "brewhouse_sqlitestore",
+      "label": "SQLiteStore",
+      "degree": 14
+    }
+  ],
+  "surprises": [
+    {
+      "source": "main()",
+      "target": "Execute()",
+      "source_files": [
+        "cmd/gotov/main.go",
+        "internal/cli/root.go"
+      ],
+      "confidence": "INFERRED",
+      "relation": "calls",
+      "why": "inferred connection - not explicitly stated in source; connects across different repos/directories"
+    },
+    {
+      "source": "RunServer()",
+      "target": "NewServer()",
+      "source_files": [
+        "internal/app/server.go",
+        "internal/api/ws.go"
+      ],
+      "confidence": "INFERRED",
+      "relation": "calls",
+      "why": "inferred connection - not explicitly stated in source; bridges separate communities"
+    },
+    {
+      "source": "Load()",
+      "target": "New()",
+      "source_files": [
+        "internal/config/config.go",
+        "internal/logger/logger.go"
+      ],
+      "confidence": "INFERRED",
+      "relation": "calls",
+      "why": "inferred connection - not explicitly stated in source; bridges separate communities"
+    },
+    {
+      "source": "Server",
+      "target": "Store",
+      "source_files": [
+        "internal/api/ws.go",
+        "internal/brewhouse/sqlite_store.go"
+      ],
+      "confidence": "EXTRACTED",
+      "relation": "references",
+      "why": "bridges separate communities"
+    },
+    {
+      "source": "Server",
+      "target": "FermentationStore",
+      "source_files": [
+        "internal/api/ws.go",
+        "internal/fermentation/store.go"
+      ],
+      "confidence": "EXTRACTED",
+      "relation": "references",
+      "why": "bridges separate communities"
+    }
+  ],
+  "tokens": {
+    "input": 0,
+    "output": 0
+  }
+}

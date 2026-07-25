@@ -1,0 +1,267 @@
+{
+  ".codex/hooks.json": {
+    "mtime": 1784980865.0587296,
+    "ast_hash": "10adb2a8166a3c74c6fe84abd613c1a5",
+    "semantic_hash": "10adb2a8166a3c74c6fe84abd613c1a5"
+  },
+  "Skills/backend-development/scripts/create_migration.ps1": {
+    "mtime": 1772372862.950345,
+    "ast_hash": "dec08bce709b6df5a7f0f9affd131372",
+    "semantic_hash": "dec08bce709b6df5a7f0f9affd131372"
+  },
+  "Skills/release-manager/scripts/prepare_release.sh": {
+    "mtime": 1772372862.9516747,
+    "ast_hash": "8339feb3e59a7ac1e404535d2a62b682",
+    "semantic_hash": "8339feb3e59a7ac1e404535d2a62b682"
+  },
+  "Skills/skill-creator/scripts/init_skill.py": {
+    "mtime": 1772372862.9519937,
+    "ast_hash": "6c859331681b3f43092ab8695d624b36",
+    "semantic_hash": "6c859331681b3f43092ab8695d624b36"
+  },
+  "Skills/skill-creator/scripts/package_skill.py": {
+    "mtime": 1772372862.9519937,
+    "ast_hash": "ca05b626406d61f50038c1a0384d78d1",
+    "semantic_hash": "ca05b626406d61f50038c1a0384d78d1"
+  },
+  "Skills/skill-creator/scripts/quick_validate.py": {
+    "mtime": 1772372862.9519937,
+    "ast_hash": "25176a4e2211e4591f60c15083087c3f",
+    "semantic_hash": "25176a4e2211e4591f60c15083087c3f"
+  },
+  "cmd/gotov/main.go": {
+    "mtime": 1763475507.8466187,
+    "ast_hash": "0cec2b0d50b59936656872d3ffab45ae",
+    "semantic_hash": "0cec2b0d50b59936656872d3ffab45ae"
+  },
+  "examples/readAnyType.go": {
+    "mtime": 1763475507.8467278,
+    "ast_hash": "d45a0b212b90874af2f5c548a7987420",
+    "semantic_hash": "d45a0b212b90874af2f5c548a7987420"
+  },
+  "go.mod": {
+    "mtime": 1765289768.9512458,
+    "ast_hash": "c54d0eb68c5368f0e12891be77d8d647",
+    "semantic_hash": "c54d0eb68c5368f0e12891be77d8d647"
+  },
+  "internal/api/brewhouse.go": {
+    "mtime": 1772372862.9519937,
+    "ast_hash": "c3fee7d23f5a05771827c2b1cd7568fe",
+    "semantic_hash": "c3fee7d23f5a05771827c2b1cd7568fe"
+  },
+  "internal/api/brewing.go": {
+    "mtime": 1772817918.9536715,
+    "ast_hash": "080c70e3e953d52a937608e30a5637b2",
+    "semantic_hash": "080c70e3e953d52a937608e30a5637b2"
+  },
+  "internal/api/fermentation.go": {
+    "mtime": 1784980270.293258,
+    "ast_hash": "cf4e974b2e95baed354effaad0d494d3",
+    "semantic_hash": "cf4e974b2e95baed354effaad0d494d3"
+  },
+  "internal/api/glycol.go": {
+    "mtime": 1784980270.2933168,
+    "ast_hash": "b8c4a6835039477b21f47e207d41c285",
+    "semantic_hash": "b8c4a6835039477b21f47e207d41c285"
+  },
+  "internal/api/write.go": {
+    "mtime": 1763562353.0483587,
+    "ast_hash": "fe1eade0d039a2bfb0391678468c2410",
+    "semantic_hash": "fe1eade0d039a2bfb0391678468c2410"
+  },
+  "internal/api/ws.go": {
+    "mtime": 1784980297.7800903,
+    "ast_hash": "949e4bc66d0c66b0b58b4cd01a9e920e",
+    "semantic_hash": "949e4bc66d0c66b0b58b4cd01a9e920e"
+  },
+  "internal/api/ws_test.go": {
+    "mtime": 1784980270.2934797,
+    "ast_hash": "229f40785ccb3f152b03b2ec03298147",
+    "semantic_hash": "229f40785ccb3f152b03b2ec03298147"
+  },
+  "internal/app/server.go": {
+    "mtime": 1784980297.7801826,
+    "ast_hash": "70bf44096d4c1bc6da3ef0d5e406944c",
+    "semantic_hash": "70bf44096d4c1bc6da3ef0d5e406944c"
+  },
+  "internal/brew/session.go": {
+    "mtime": 1772372862.9519937,
+    "ast_hash": "942fcd99e300df265a8ce9001bfa65fa",
+    "semantic_hash": "942fcd99e300df265a8ce9001bfa65fa"
+  },
+  "internal/brewfather/batches.go": {
+    "mtime": 1764510222.3308184,
+    "ast_hash": "43e775b86b582c3d0dcf0c434f724956",
+    "semantic_hash": "43e775b86b582c3d0dcf0c434f724956"
+  },
+  "internal/brewfather/client.go": {
+    "mtime": 1763475507.8472736,
+    "ast_hash": "ee06bd6a1535e3744b8966baeb411354",
+    "semantic_hash": "ee06bd6a1535e3744b8966baeb411354"
+  },
+  "internal/brewfather/list.go": {
+    "mtime": 1763475507.8472736,
+    "ast_hash": "999c998570b2fc11c0eb3b29ac561c4f",
+    "semantic_hash": "999c998570b2fc11c0eb3b29ac561c4f"
+  },
+  "internal/brewfather/parser.go": {
+    "mtime": 1772372862.9519937,
+    "ast_hash": "90d0e47236fd91a09ef49452c92d76e3",
+    "semantic_hash": "90d0e47236fd91a09ef49452c92d76e3"
+  },
+  "internal/brewfather/recipes.go": {
+    "mtime": 1764510222.3308184,
+    "ast_hash": "e0248cefb7ffe5529c3a7adc1cb05195",
+    "semantic_hash": "e0248cefb7ffe5529c3a7adc1cb05195"
+  },
+  "internal/brewfather/types.go": {
+    "mtime": 1772372862.9519937,
+    "ast_hash": "a421d7576a3abfc34d5cd82bc0ea56c0",
+    "semantic_hash": "a421d7576a3abfc34d5cd82bc0ea56c0"
+  },
+  "internal/brewhouse/engine.go": {
+    "mtime": 1784980297.7803013,
+    "ast_hash": "3b9fed5301286462adfa5624398af297",
+    "semantic_hash": "3b9fed5301286462adfa5624398af297"
+  },
+  "internal/brewhouse/engine_test.go": {
+    "mtime": 1772817918.9543867,
+    "ast_hash": "94a7013724e6dfecda4720cb3083ad04",
+    "semantic_hash": "94a7013724e6dfecda4720cb3083ad04"
+  },
+  "internal/brewhouse/pid.go": {
+    "mtime": 1772817918.9543867,
+    "ast_hash": "1154968f90e13685c9b3dfeb7469e59a",
+    "semantic_hash": "1154968f90e13685c9b3dfeb7469e59a"
+  },
+  "internal/brewhouse/pid_test.go": {
+    "mtime": 1772817918.9543867,
+    "ast_hash": "122492f5b6d50beb8b6f98b8a3463c30",
+    "semantic_hash": "122492f5b6d50beb8b6f98b8a3463c30"
+  },
+  "internal/brewhouse/sqlite_store.go": {
+    "mtime": 1772817918.9543867,
+    "ast_hash": "c1cc25e5f22e46282f07f4528289c957",
+    "semantic_hash": "c1cc25e5f22e46282f07f4528289c957"
+  },
+  "internal/brewhouse/types.go": {
+    "mtime": 1772817918.9543867,
+    "ast_hash": "cbf0f588e6785f1909aebd4e104a4f4e",
+    "semantic_hash": "cbf0f588e6785f1909aebd4e104a4f4e"
+  },
+  "internal/cli/brewfather_batches.go": {
+    "mtime": 1763475507.8472736,
+    "ast_hash": "3364d8a60abfc2cd076a380db38f0111",
+    "semantic_hash": "3364d8a60abfc2cd076a380db38f0111"
+  },
+  "internal/cli/brewfather_list.go": {
+    "mtime": 1763475507.8474088,
+    "ast_hash": "7236bf13e8cb4e04abc3cd558ed169b4",
+    "semantic_hash": "7236bf13e8cb4e04abc3cd558ed169b4"
+  },
+  "internal/cli/fermentation.go": {
+    "mtime": 1763475507.8474088,
+    "ast_hash": "f476064b5bdc8afb144b6350b39ae14c",
+    "semantic_hash": "f476064b5bdc8afb144b6350b39ae14c"
+  },
+  "internal/cli/fermentation_db.go": {
+    "mtime": 1765289768.9512458,
+    "ast_hash": "982c7095bad5aa1b02b40969594f64f7",
+    "semantic_hash": "982c7095bad5aa1b02b40969594f64f7"
+  },
+  "internal/cli/root.go": {
+    "mtime": 1763475507.8474088,
+    "ast_hash": "db029963821a84df8f0ad2f1c19c3a11",
+    "semantic_hash": "db029963821a84df8f0ad2f1c19c3a11"
+  },
+  "internal/cli/server.go": {
+    "mtime": 1763475507.8474088,
+    "ast_hash": "82b2bee7550e513837873198fe608cfb",
+    "semantic_hash": "82b2bee7550e513837873198fe608cfb"
+  },
+  "internal/config/config.go": {
+    "mtime": 1772372862.9533715,
+    "ast_hash": "ec33c91785a761ac0f07bbae1f5541ac",
+    "semantic_hash": "ec33c91785a761ac0f07bbae1f5541ac"
+  },
+  "internal/fermentation/engine.go": {
+    "mtime": 1784980297.7804697,
+    "ast_hash": "ddfafb29d77e98b6dda52926877c6509",
+    "semantic_hash": "ddfafb29d77e98b6dda52926877c6509"
+  },
+  "internal/fermentation/sqlite_store.go": {
+    "mtime": 1784980270.2937284,
+    "ast_hash": "11e56ff9eacddeb686c73eef4e43a110",
+    "semantic_hash": "11e56ff9eacddeb686c73eef4e43a110"
+  },
+  "internal/fermentation/sqlite_store_test.go": {
+    "mtime": 1784980270.2937782,
+    "ast_hash": "c5a62281d4e6bb5b7aaa968df471a38a",
+    "semantic_hash": "c5a62281d4e6bb5b7aaa968df471a38a"
+  },
+  "internal/fermentation/store.go": {
+    "mtime": 1784980270.2938583,
+    "ast_hash": "bd01d9d45cfba018bb16da64f2ecc4ca",
+    "semantic_hash": "bd01d9d45cfba018bb16da64f2ecc4ca"
+  },
+  "internal/fermentation/types.go": {
+    "mtime": 1784980270.293915,
+    "ast_hash": "9b14c05837131e9184014b900102176d",
+    "semantic_hash": "9b14c05837131e9184014b900102176d"
+  },
+  "internal/logger/logger.go": {
+    "mtime": 1763475507.8475273,
+    "ast_hash": "b54045bb4d7ff0ca7e1933839bcb6d2c",
+    "semantic_hash": "b54045bb4d7ff0ca7e1933839bcb6d2c"
+  },
+  "internal/opcua/client.go": {
+    "mtime": 1784980297.7806344,
+    "ast_hash": "a9049b70a0b929d0d73857316d074bdc",
+    "semantic_hash": "a9049b70a0b929d0d73857316d074bdc"
+  },
+  "internal/opcua/nodes.go": {
+    "mtime": 1772817918.9549189,
+    "ast_hash": "eb002ffbf20f09de7c36ff0bb5ce1713",
+    "semantic_hash": "eb002ffbf20f09de7c36ff0bb5ce1713"
+  },
+  "internal/opcua/subscribe.go": {
+    "mtime": 1772372862.9539866,
+    "ast_hash": "5e62660727e0e463f5c84c5846be0edf",
+    "semantic_hash": "5e62660727e0e463f5c84c5846be0edf"
+  },
+  "internal/opcua/write.go": {
+    "mtime": 1784980297.7807012,
+    "ast_hash": "79cca1d6c8ea28bd96f10ad5409917bd",
+    "semantic_hash": "79cca1d6c8ea28bd96f10ad5409917bd"
+  },
+  "internal/version/version.go": {
+    "mtime": 1764516811.688548,
+    "ast_hash": "e3232ecc9e33d6ebfe25c04ddd16eb14",
+    "semantic_hash": "e3232ecc9e33d6ebfe25c04ddd16eb14"
+  },
+  "scripts/docker-entrypoint.sh": {
+    "mtime": 1765289768.952082,
+    "ast_hash": "33cd39340990c046abbdb2e5692ebab0",
+    "semantic_hash": "33cd39340990c046abbdb2e5692ebab0"
+  },
+  "scripts/hooks/pre-commit": {
+    "mtime": 1764510222.3316631,
+    "ast_hash": "4d2af02044a0e00da51c8ebf1015d7c1",
+    "semantic_hash": "4d2af02044a0e00da51c8ebf1015d7c1"
+  },
+  "scripts/hooks/pre-merge": {
+    "mtime": 1764510222.331708,
+    "ast_hash": "62e8c3d8775e1cf721be96edba8fc322",
+    "semantic_hash": "62e8c3d8775e1cf721be96edba8fc322"
+  },
+  "scripts/hooks/pre-push": {
+    "mtime": 1764510222.331708,
+    "ast_hash": "fdc930f7382c335c474919a6e1cd7a21",
+    "semantic_hash": "fdc930f7382c335c474919a6e1cd7a21"
+  },
+  "scripts/install-hooks.sh": {
+    "mtime": 1764510222.331708,
+    "ast_hash": "cf50085aae4816b876386c16db2365a2",
+    "semantic_hash": "cf50085aae4816b876386c16db2365a2"
+  }
+}
