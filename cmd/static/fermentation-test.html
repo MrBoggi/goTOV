@@ -1,0 +1,516 @@
+<!DOCTYPE html>
+<html lang="no">
+<head>
+<meta charset="UTF-8" />
+<title>🍺 goTØV – Fermentering Testside</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+<!-- Chart.js -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<style>
+  body {
+    font-family: "Segoe UI", sans-serif;
+    background: #111;
+    color: #eee;
+    padding: 20px;
+    margin: 0;
+  }
+
+  h1 { color:#ffa500; margin-top:0; }
+  h2 {
+    margin-top:30px;
+    border-bottom:1px solid #333;
+    padding-bottom:5px;
+    color:#ffa500;
+  }
+  h3 { color:#ffa500; margin-top:10px; }
+
+  button {
+    padding: 8px 14px;
+    font-weight:bold;
+    background:#333;
+    color:white;
+    border:1px solid #555;
+    border-radius:6px;
+    cursor:pointer;
+  }
+  button:hover { background:#444; }
+
+  table {
+    border-collapse: collapse;
+    width: 100%;
+    background:#222;
+    border-radius:8px;
+    overflow:hidden;
+    margin-top:10px;
+  }
+  th, td {
+    padding:6px 10px;
+    border-bottom:1px solid #333;
+  }
+  th { background:#333; color:#ffa500; }
+
+  input[type="number"], input[type="text"], select {
+    padding:6px;
+    background:#222;
+    border:1px solid #444;
+    color:white;
+    border-radius:4px;
+    width:100%;
+    box-sizing:border-box;
+  }
+
+  .tank-card {
+    background:#151515;
+    border-radius:10px;
+    padding:12px 14px 16px;
+    margin-bottom:25px;
+    box-shadow:0 0 10px rgba(0,0,0,0.4);
+  }
+
+  .tank-meta-box {
+    margin-top:12px;
+    background:#1a1a1a;
+    padding:15px;
+    border-radius:10px;
+  }
+  .tank-meta-box div { margin-bottom:4px; font-size:0.9rem; }
+  .tank-meta-box b { color:#ffa500; }
+
+  canvas {
+    width:100% !important;
+    height:200px !important;
+    background:#111;
+    border-radius:6px;
+  }
+
+  .section-box {
+    background:#1a1a1a;
+    padding:12px 15px 16px;
+    border-radius:10px;
+    margin-top:10px;
+  }
+
+  .layout {
+    display:grid;
+    grid-template-columns:minmax(0, 1fr) minmax(0, 1.1fr);
+    gap:25px;
+  }
+
+  @media (max-width: 1100px) {
+    .layout { grid-template-columns:1fr; }
+    canvas { height:160px !important; }
+  }
+</style>
+</head>
+
+<body>
+
+<h1>🍶 goTØV – Fermentering Testside</h1>
+
+<div class="layout">
+
+  <!-- LEFT PANE -->
+  <div class="left-pane">
+
+    <h2>📦 Brewfather batcher</h2>
+    <div class="section-box">
+      <button id="btnFetch">🔄 Hent batcher</button>
+      <br><br>
+      <select id="batchSelect" style="max-width:400px; display:none;"></select>
+
+      <div id="batchLoaded" style="display:none; margin-top:20px;">
+        <h3>🛠 Rediger fermenteringssteg</h3>
+        <table>
+          <thead>
+            <tr>
+              <th>Steg</th>
+              <th>Temp (°C)</th>
+              <th>Timer</th>
+              <th>Type</th>
+              <th>Beskrivelse</th>
+            </tr>
+          </thead>
+          <tbody id="stepsBody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <h2>🚀 Start gjæring</h2>
+    <div class="section-box">
+      <label>Tank:</label><br>
+      <select id="startTank" style="width:220px;">
+        <option value="1">Fermenter 1</option>
+        <option value="2">Fermenter 2</option>
+      </select>
+      <br><br>
+
+      <label>Start fra steg:</label><br>
+      <select id="startStep" style="width:220px;"></select>
+      <br><br>
+
+      <button id="btnStartBrewfather" style="padding:10px 20px;">🍺 Start Brewfather-gjæring</button>
+    </div>
+
+    <h2>🧪 Custom fermentering</h2>
+    <div class="section-box">
+
+      <label>Navn på batch:</label><br>
+      <input id="customName" type="text" placeholder="FWK – Hazy IPA">
+
+      <h3>Steg</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>Steg</th>
+            <th>Temp</th>
+            <th>Timer</th>
+            <th>Type</th>
+            <th>Beskrivelse</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="customStepsBody"></tbody>
+      </table>
+
+      <button id="btnAddCustomStep" style="margin-top:10px;">➕ Legg til steg</button>
+
+      <br><br>
+      <label>Tank:</label><br>
+      <select id="customTank" style="width:220px;">
+        <option value="1">Fermenter 1</option>
+        <option value="2">Fermenter 2</option>
+      </select>
+
+      <br><br>
+      <button id="btnStartCustom" style="padding:10px 20px;">🚀 Start Custom Fermentering</button>
+    </div>
+
+  </div>
+
+  <!-- RIGHT PANE -->
+  <div class="right-pane">
+    <h2>📈 Fermenteringsgrafer</h2>
+
+    <div class="tank-card">
+      <h3>Fermenter 1</h3>
+      <canvas id="tank1Chart"></canvas>
+      <div class="tank-meta-box">
+        <div><b>Batch:</b> <span id="f1_batch">-</span></div>
+        <div><b>Plan:</b> <span id="f1_plan">-</span></div>
+        <div><b>Status:</b> <span id="f1_status">-</span></div>
+        <div><b>Startet:</b> <span id="f1_started">-</span></div>
+        <div><b>Steg:</b> <span id="f1_step">-</span></div>
+        <div><b>Steg startet:</b> <span id="f1_step_started">-</span></div>
+        <div><b>Setpoint:</b> <span id="f1_sp">-</span></div>
+        <div><b>Temp:</b> <span id="t1_temp">-</span></div>
+      </div>
+    </div>
+
+    <div class="tank-card">
+      <h3>Fermenter 2</h3>
+      <canvas id="tank2Chart"></canvas>
+      <div class="tank-meta-box">
+        <div><b>Batch:</b> <span id="f2_batch">-</span></div>
+        <div><b>Plan:</b> <span id="f2_plan">-</span></div>
+        <div><b>Status:</b> <span id="f2_status">-</span></div>
+        <div><b>Startet:</b> <span id="f2_started">-</span></div>
+        <div><b>Steg:</b> <span id="f2_step">-</span></div>
+        <div><b>Steg startet:</b> <span id="f2_step_started">-</span></div>
+        <div><b>Setpoint:</b> <span id="f2_sp">-</span></div>
+        <div><b>Temp:</b> <span id="t2_temp">-</span></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ------------------------------------------------------------ */
+/* Konstanter                                                   */
+/* ------------------------------------------------------------ */
+const WS_URL = "ws://localhost:8080/api/stream/tags";
+const API_ACTIVE = "http://localhost:8080/api/fermentation/active";
+const API_BF_BATCHES = "http://localhost:8080/api/brewfather/batches";
+const API_BF_BATCH = "http://localhost:8080/api/brewfather/batch/";
+const API_FERMENT_START = "http://localhost:8080/api/fermentation/start";
+
+const T1_NODE = "ns=4;s=MAIN.fbUA.fermenter1Temp";
+const T2_NODE = "ns=4;s=MAIN.fbUA.fermenter2Temp";
+
+const MAX_POINTS = 2000;
+
+/* ------------------------------------------------------------ */
+/* Hjelpere                                                     */
+/* ------------------------------------------------------------ */
+function setText(id, v) { const el = document.getElementById(id); if (el) el.textContent = v; }
+function scaleTemp(v) { return Number(v) / 1; }
+
+/* ------------------------------------------------------------ */
+/* Chart.js setup                                               */
+/* ------------------------------------------------------------ */
+function makeChart(ctx) {
+  return new Chart(ctx, {
+    type: "line",
+    data: {
+      labels: [],
+      datasets: [
+        { label:"Temp (°C)", data:[], borderColor:"orange", borderWidth:2, tension:0.3, pointRadius:0 },
+        { label:"Setpoint", data:[], borderColor:"cyan", borderDash:[5,5], tension:0.3, pointRadius:0 }
+      ]
+    },
+    options: {
+      responsive:true, maintainAspectRatio:false,
+      scales:{ x:{ticks:{color:"#ccc"}}, y:{ticks:{color:"#ccc"}}},
+      plugins:{ legend:{labels:{color:"#eee"}} }
+    }
+  });
+}
+
+const tankCharts = {
+  1: makeChart(document.getElementById("tank1Chart").getContext("2d")),
+  2: makeChart(document.getElementById("tank2Chart").getContext("2d"))
+};
+
+function pushPoint(tank, temp, sp, tsMs) {
+  const c = tankCharts[tank];
+  const d = c.data;
+
+  d.labels.push(new Date(tsMs).toLocaleTimeString());
+  d.datasets[0].data.push(temp);
+
+  const lastSP = d.datasets[1].data.length > 0
+      ? d.datasets[1].data[d.datasets[1].data.length - 1]
+      : sp;
+
+  d.datasets[1].data.push(sp ?? lastSP);
+
+  if (d.labels.length > MAX_POINTS) {
+    d.labels.shift();
+    d.datasets[0].data.shift();
+    d.datasets[1].data.shift();
+  }
+
+  c.update("none");
+}
+
+function updateSetpointLine(tank, sp) {
+  const c = tankCharts[tank];
+  const d = c.data;
+  if (!d.labels.length) return;
+
+  while (d.datasets[1].data.length < d.labels.length) {
+    const last = d.datasets[1].data[d.datasets[1].data.length - 1] ?? sp;
+    d.datasets[1].data.push(last);
+  }
+
+  d.datasets[1].data[d.labels.length - 1] = sp;
+  c.update("none");
+}
+
+/* ------------------------------------------------------------ */
+/* WebSocket – temperaturstrøm                                 */
+/* ------------------------------------------------------------ */
+function connectWS() {
+  const ws = new WebSocket(WS_URL);
+
+  ws.onmessage = (e) => {
+    const msg = JSON.parse(e.data);
+    const tag = msg.tag;
+    const raw = msg.value;
+    const temp = scaleTemp(raw);
+
+    if (tag === T1_NODE) {
+      setText("t1_temp", temp.toFixed(1)+" °C");
+      pushPoint(1, temp, null, msg.ts_ms);
+    }
+    if (tag === T2_NODE) {
+      setText("t2_temp", temp.toFixed(1)+" °C");
+      pushPoint(2, temp, null, msg.ts_ms);
+    }
+  };
+
+  ws.onclose = () => setTimeout(connectWS, 2000);
+}
+connectWS();
+
+/* ------------------------------------------------------------ */
+/* Poll fermentation/active                                     */
+/* ------------------------------------------------------------ */
+async function pollActive() {
+  const res = await fetch(API_ACTIVE);
+  if (!res.ok) return;
+
+  const d = await res.json();
+  const t = Number(d.tank_no);
+
+  if (t === 1) {
+    setText("f1_batch", d.batch_id);
+    setText("f1_plan", d.plan_id);
+    setText("f1_status", d.status);
+    setText("f1_started", d.started_at);
+    setText("f1_step", d.current_step);
+    setText("f1_step_started", d.step_started_at);
+
+    if (d.target_temp != null) {
+      const sp = d.target_temp;
+      setText("f1_sp", sp+" °C");
+      updateSetpointLine(1, sp);
+    }
+  }
+
+  if (t === 2) {
+    setText("f2_batch", d.batch_id);
+    setText("f2_plan", d.plan_id);
+    setText("f2_status", d.status);
+    setText("f2_started", d.started_at);
+    setText("f2_step", d.current_step);
+    setText("f2_step_started", d.step_started_at);
+
+    if (d.target_temp != null) {
+      const sp = d.target_temp;
+      setText("f2_sp", sp+" °C");
+      updateSetpointLine(2, sp);
+    }
+  }
+}
+
+setInterval(pollActive, 3000);
+pollActive();
+
+/* ------------------------------------------------------------ */
+/* Brewfather + Custom (samme logikk som før)                   */
+/* ------------------------------------------------------------ */
+let currentSteps = [];
+let selectedBatch = null;
+let customSteps = [];
+
+// Hent batcher
+document.getElementById("btnFetch").onclick = async () => {
+  const res = await fetch(API_BF_BATCHES);
+  const batches = await res.json();
+
+  const sel = document.getElementById("batchSelect");
+  sel.innerHTML = batches.map(b => `<option value="${b._id}">${b.name}</option>`).join("");
+  sel.style.display = "inline-block";
+};
+
+// Velg batch
+document.getElementById("batchSelect").onchange = async () => {
+  const id = batchSelect.value;
+  const res = await fetch(API_BF_BATCH + id);
+  const b = await res.json();
+
+  selectedBatch = b;
+  currentSteps = convertBFSteps(b);
+  renderBFSteps();
+
+  startStep.innerHTML = currentSteps
+    .map((s,i)=>`<option value="${i}">Steg ${s.step_number}</option>`)
+    .join("");
+
+  batchLoaded.style.display = "block";
+};
+
+function convertBFSteps(b) {
+  if (b.recipe?.fermentation?.steps) {
+    return b.recipe.fermentation.steps.map((s,i)=>({
+      step_number: i+1,
+      temperature: s.stepTemp ?? s.temperature ?? 20,
+      duration_hours: s.stepTime ?? s.time ?? 24,
+      type: s.type ?? "Fermentation",
+      description: s.description ?? `Steg ${i+1}`
+    }));
+  }
+  return [];
+}
+
+function renderBFSteps() {
+  stepsBody.innerHTML = currentSteps.map((s,i)=>`
+    <tr>
+      <td>${s.step_number}</td>
+      <td><input type="number" value="${s.temperature}" onchange="currentSteps[${i}].temperature = Number(this.value)"></td>
+      <td><input type="number" value="${s.duration_hours}" onchange="currentSteps[${i}].duration_hours = Number(this.value)"></td>
+      <td><input type="text" value="${s.type}" onchange="currentSteps[${i}].type = this.value"></td>
+      <td><input type="text" value="${s.description}" onchange="currentSteps[${i}].description = this.value"></td>
+    </tr>
+  `).join("");
+}
+
+// Start BF fermentering
+document.getElementById("btnStartBrewfather").onclick = async () => {
+  if (!selectedBatch) return alert("Velg batch først");
+  const payload = {
+    batch_id: selectedBatch._id,
+    tank_no: Number(startTank.value),
+    start_step: Number(startStep.value),
+    steps: currentSteps
+  };
+  const r = await fetch(API_FERMENT_START, {method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)});
+  alert(await r.text());
+};
+
+// Custom steps
+document.getElementById("btnAddCustomStep").onclick = () => {
+  customSteps.push({
+    step_number: customSteps.length+1,
+    temperature:20,
+    duration_hours:24,
+    type:"Fermentation",
+    description:""
+  });
+  renderCustomSteps();
+};
+
+function renderCustomSteps() {
+  customStepsBody.innerHTML = customSteps.map((s,i)=>`
+    <tr>
+      <td>${s.step_number}</td>
+      <td><input type="number" value="${s.temperature}" onchange="updateCustom(${i},'temperature',this.value)"></td>
+      <td><input type="number" value="${s.duration_hours}" onchange="updateCustom(${i},'duration_hours',this.value)"></td>
+      <td><input type="text" value="${s.type}" onchange="updateCustom(${i},'type',this.value)"></td>
+      <td><input type="text" value="${s.description}" onchange="updateCustom(${i},'description',this.value)"></td>
+      <td><button onclick="removeCustom(${i})">❌</button></td>
+    </tr>
+  `).join("");
+}
+
+function updateCustom(i, field, value) {
+  if (field === "temperature" || field === "duration_hours") {
+    customSteps[i][field] = Number(value);
+  } else {
+    customSteps[i][field] = value;
+  }
+}
+function removeCustom(i){
+  customSteps.splice(i,1);
+  customSteps.forEach((s,ix)=>s.step_number=ix+1);
+  renderCustomSteps();
+}
+
+// Start custom fermentering
+document.getElementById("btnStartCustom").onclick = async ()=>{
+  const name = customName.value.trim();
+  if (!name) return alert("Skriv inn navn");
+  if (customSteps.length===0) return alert("Legg til steg");
+
+const payload = {
+  batch_id: name,
+  tank_no: Number(customTank.value),
+  start_step: 0,
+  steps: customSteps.map(s => ({
+    step_number: Number(s.step_number),
+    temperature: Number(s.temperature),
+    duration_hours: Number(s.duration_hours),
+    type: s.type,
+    description: s.description
+  }))
+};
+
+  const r = await fetch(API_FERMENT_START,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)});
+  alert(await r.text());
+};
+
+</script>
+</body>
+</html>

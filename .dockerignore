@@ -1,0 +1,13 @@
+.git
+.gitignore
+.github
+.vscode
+.idea
+*.md
+Dockerfile
+.dockerignore
+data/
+*.db
+*.db-journal
+*.log
+vendor/

@@ -1,0 +1,66 @@
+version: "3.9"
+
+services:
+  gotaplist:
+    image: ghcr.io/mrboggi/gotaplist:latest
+    container_name: gotaplist
+    restart: unless-stopped
+
+    ports:
+      - "18080:8081"
+
+    environment:
+      - TZ=Europe/Oslo
+      - GOTAPLIST_ENV=production
+
+    volumes:
+      - gotaplist_data:/data  # <- DB lagres her
+
+    networks:
+      - gotaplist_net
+
+  gotovgui:
+    image: ghcr.io/mrboggi/gotovgui:latest
+    container_name: gotovgui
+    restart: unless-stopped
+    ports:
+      - "18073:80"
+    depends_on:
+      - gotaplist
+    networks:
+      - gotaplist_net
+
+  gotov:
+    image: ghcr.io/mrboggi/gotov:latest
+    container_name: gotov
+    command: ["server"] # Sørger for at serveren faktisk starter
+    restart: unless-stopped
+    ports:
+      - "18085:8085" # Intern port 8085 (fra Dockerfile) mappes til 18085 på host
+    networks:
+      - gotaplist_net
+    # Konfigurasjon settes nå via miljøvariabler (perfekt for Portainer).
+    # Docker-imaget har en innebygd standardkonfigurasjon.
+    # Du overstyrer bare det du trenger å endre.
+    #
+    # Eksempel for Portainer-stack eller docker-compose.yml:
+    # Miljøvariabler fylles nå inn via substitusjon fra Portainer UI.
+    environment:
+      - GOTOV_OPCUA_ENDPOINT=${GOTOV_OPCUA_ENDPOINT}
+      - GOTOV_OPCUA_USERNAME=${GOTOV_OPCUA_USERNAME}
+      - GOTOV_OPCUA_PASSWORD=${GOTOV_OPCUA_PASSWORD}
+      - GOTOV_BREWFATHER_API_KEY=${GOTOV_BREWFATHER_API_KEY}
+      - GOTOV_BREWFATHER_USER_ID=${GOTOV_BREWFATHER_USER_ID}
+      - GOTOV_LOGGING_LEVEL=${GOTOV_LOGGING_LEVEL:-info} # Bruker 'info' hvis ikke satt
+      - TZ=Europe/Oslo
+    volumes:
+      - gotov_data:/app/data # App-data som f.eks. fermenteringsdatabase
+
+volumes:
+  gotaplist_data:
+    external: true
+  gotov_data: {} # Nytt volum for goTOV data
+
+networks:
+  gotaplist_net:
+    driver: bridge

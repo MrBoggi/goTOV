@@ -1,0 +1,38 @@
+#!/bin/sh
+
+echo "🔍 Running pre-merge checks..."
+
+# Conflict markers
+if git grep -n '<<<<<<<' -- .; then
+    echo "❌ Merge conflict markers found"
+    exit 1
+fi
+
+echo "▶ Checking build..."
+if ! go build ./...; then
+    echo "❌ Build failed"
+    exit 1
+fi
+
+echo "▶ Checking gofmt..."
+unformatted=$(gofmt -l .)
+if [ -n "$unformatted" ]; then
+    echo "❌ Unformatted files:"
+    echo "$unformatted"
+    exit 1
+fi
+
+echo "▶ Running go vet..."
+if ! go vet ./...; then
+    echo "❌ go vet failed"
+    exit 1
+fi
+
+echo "▶ Running golangci-lint..."
+if ! golangci-lint run; then
+    echo "❌ Linter issues"
+    exit 1
+fi
+
+echo "✅ Pre-merge checks passed."
+exit 0

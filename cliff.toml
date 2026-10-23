@@ -1,0 +1,54 @@
+# ============================================
+#  goTØV – Changelog Configuration (git-cliff)
+# ============================================
+
+# General changelog settings
+[changelog]
+header = """
+# Changelog
+
+Alle endringer i dette prosjektet listes her.
+"""
+body = """
+{% if version %}## 🚀 {{ version }} - {{ timestamp | date(format="%Y-%m-%d") }}{% endif %}
+{% for group, commits in commits | group_by(attribute="group") %}
+### {{ group }}
+{% for commit in commits %}
+- {{ commit.message }} ({{ commit.id | truncate(length=8) }})
+{% endfor %}
+{% endfor %}
+"""
+footer = "\n"
+
+# -----------------------------
+# Commit Parsing
+# -----------------------------
+[git]
+conventional_commits = true
+filter_commits = true
+ignore_merge_commits = true
+commit_parsers = [
+  { message = "^feat", group = "✨ Nye funksjoner" },
+  { message = "^fix", group = "🐛 Fikser" },
+  { message = "^docs", group = "📚 Dokumentasjon" },
+  { message = "^refactor", group = "♻️ Refaktorering" },
+  { message = "^perf", group = "⚡ Ytelsesforbedringer" },
+  { message = "^test", group = "🧪 Tester" },
+  { message = "^chore", group = "🔧 Diverse" },
+  { message = "^ci", group = "🤖 CI/CD" },
+  { message = "^build", group = "📦 Build system" },
+  # Fallback:
+  { message = ".*", group = "Øvrige endringer" },
+]
+
+# -----------------------------
+# Tag pattern
+# -----------------------------
+# Your tags look like: v2025.11.1
+tag_pattern = "^v[0-9]{4}\\.[0-9]{2}\\.[0-9]+$"
+
+# -----------------------------
+# Bump rules (not used for date versions, but required)
+# -----------------------------
+[bump]
+initial_tag = "v2025.01.1"
