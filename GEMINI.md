@@ -3,13 +3,13 @@
 Du er en ekspert på Go (Golang) utvikling og Git-versjonskontroll. Når du utfører oppgaver i dette prosjektet, SKAL du følge instruksjonene nedenfor nøye.
 
 ## 1. GIT WORKFLOW (STRENG)
-Alle endringer skal følge "Feature Branch"-modellen med utgangspunkt i `Development`. Du skal aldri committe direkte til `Development` eller `main` utenom merge.
+Alle endringer skal følge "Feature Branch"-modellen med utgangspunkt i `main`. Du skal aldri committe direkte til `main` utenom merge via Pull Request.
 
 **Fremgangsmåte for hver endring:**
 
-1.  **Starttilstand:** Sørg alltid for at du er på `Development` og har siste versjon.
-    * `git checkout development`
-    * `git pull origin development`
+1.  **Starttilstand:** Sørg alltid for at du er på `main` og har siste versjon.
+    * `git checkout main`
+    * `git pull origin main`
 2.  **Opprett Branch:** Lag en beskrivende branch for oppgaven.
     * Bruk prefiks: `feature/` for ny funksjonalitet, `fix/` for feilretting, `refactor/` for kodeforbedring.
     * Eks: `git checkout -b feature/ny-login-handler`
@@ -18,9 +18,7 @@ Alle endringer skal følge "Feature Branch"-modellen med utgangspunkt i `Develop
 5.  **Commit:** Stage og commit endringene med en tydelig melding (Conventional Commits).
     * `git add .`
     * `git commit -m "feat: beskrivelse av endring"`
-6.  **Merge:** Gå tilbake til Development og flett inn endringene.
-    * `git checkout development`
-    * `git merge &lt;branch-navn&gt;`
+6.  **Pull Request:** Opprett en Pull Request mot `main`. La GitHub Actions kjøre tester og merge via GitHub når den er godkjent.
 7.  **Opprydding:** Slett branchen lokalt etter merge (hvis vellykket).
     * `git branch -d &lt;branch-navn&gt;`
 

@@ -1,0 +1,29 @@
+services:
+  gotov:
+    image: ${GOTOV_IMAGE:?Set GOTOV_IMAGE to the image being deployed}
+    container_name: gotov
+    restart: unless-stopped
+    ports:
+      - "18085:8085"
+    environment:
+      GOTOV_OPCUA_ENDPOINT: ${GOTOV_OPCUA_ENDPOINT}
+      GOTOV_OPCUA_USERNAME: ${GOTOV_OPCUA_USERNAME}
+      GOTOV_OPCUA_PASSWORD: ${GOTOV_OPCUA_PASSWORD}
+      GOTOV_BREWFATHER_API_KEY: ${GOTOV_BREWFATHER_API_KEY}
+      GOTOV_BREWFATHER_USER_ID: ${GOTOV_BREWFATHER_USER_ID}
+      GOTOV_LOGGING_LEVEL: ${GOTOV_LOGGING_LEVEL:-info}
+      TZ: Europe/Oslo
+    volumes:
+      - gotov_data:/app/data
+    networks:
+      - gotaplist_net
+
+volumes:
+  gotov_data:
+    external: true
+    name: go-tov_gotov_data
+
+networks:
+  gotaplist_net:
+    external: true
+    name: go-tov_gotaplist_net

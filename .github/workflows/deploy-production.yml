@@ -1,0 +1,82 @@
+name: Build and Deploy Production
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: gotov-production-deploy
+  cancel-in-progress: false
+
+jobs:
+  build-and-deploy:
+    name: Build locally and deploy goTOV
+    runs-on: [self-hosted, linux, x64, deploy-gotov]
+    timeout-minutes: 20
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Derive immutable image tag
+        id: image
+        env:
+          TZ: Europe/Oslo
+        run: |
+          version="$(date +'%Y.%m').${{ github.run_number }}"
+          image="gotov:${version}"
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+          echo "image=${image}" >> "$GITHUB_OUTPUT"
+
+      - name: Remember current image
+        id: previous
+        run: |
+          if docker inspect gotov >/dev/null 2>&1; then
+            echo "image=$(docker inspect --format '{{.Config.Image}}' gotov)" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Build local Docker image
+        run: |
+          docker build \
+            --build-arg "BUILD_VERSION=${{ steps.image.outputs.version }}" \
+            --label "org.opencontainers.image.revision=${{ github.sha }}" \
+            --label "org.opencontainers.image.version=${{ steps.image.outputs.version }}" \
+            --tag "${{ steps.image.outputs.image }}" \
+            --tag gotov:latest \
+            .
+
+      - name: Deploy goTOV
+        env:
+          GOTOV_IMAGE: ${{ steps.image.outputs.image }}
+        run: docker compose --env-file /home/gotapdeploy/bryggeri-deploy/gotov/production.env --project-name go-tov --file deploy/compose.production.yml up --detach --no-deps gotov
+
+      - name: Wait for container health
+        run: |
+          for attempt in $(seq 1 18); do
+            status="$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}starting{{end}}' gotov)"
+            echo "Health status: ${status}"
+            if [ "${status}" = healthy ]; then
+              exit 0
+            fi
+            if [ "${status}" = unhealthy ]; then
+              exit 1
+            fi
+            sleep 5
+          done
+          echo "Timed out waiting for a healthy container" >&2
+          exit 1
+
+      - name: Roll back failed deployment
+        if: failure() && steps.previous.outputs.image != ''
+        env:
+          GOTOV_IMAGE: ${{ steps.previous.outputs.image }}
+        run: docker compose --env-file /home/gotapdeploy/bryggeri-deploy/gotov/production.env --project-name go-tov --file deploy/compose.production.yml up --detach --no-deps gotov
+
+      - name: Show failed container logs
+        if: failure()
+        run: docker logs --tail 200 gotov
