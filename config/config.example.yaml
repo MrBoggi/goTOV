@@ -8,6 +8,19 @@ opcua:
   username: ""
   password: ""
 
+# Separate, read-only ADS verification path. It is disabled by default and does
+# not replace OPC UA or expose any ADS write capability.
+ads:
+  enabled: false
+  host: ""
+  port: 48898
+  target_net_id: ""
+  target_port: 851
+  local_net_id: ""
+  local_port: 10500
+  request_timeout: "8s"
+  poll_interval: "5s"
+
 logging:
   level: "info" # "debug" is also a good option
 

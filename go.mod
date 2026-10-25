@@ -1,15 +1,17 @@
 module github.com/MrBoggi/goTOV
 
-go 1.25.3
+go 1.26.2
 
 require (
 	github.com/gopcua/opcua v0.8.0
 	github.com/rs/zerolog v1.34.0
+	github.com/siyka-au/go-ads/v3 v3.0.1
 	github.com/spf13/viper v1.21.0
 	github.com/stretchr/testify v1.11.1
 )
 
 require (
+	cloud.google.com/go v0.123.0 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect
 	github.com/fsnotify/fsnotify v1.9.0 // indirect
