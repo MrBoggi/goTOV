@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"os/signal"
 	"sync"
@@ -38,6 +39,11 @@ func RunServer(log zerolog.Logger) error {
 	// --- Context for subs ---
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
+	adsFreshness, err := time.ParseDuration(cfg.ADS.FreshnessWindow)
+	if err != nil || adsFreshness <= 0 {
+		return fmt.Errorf("invalid ADS freshness_window %q", cfg.ADS.FreshnessWindow)
+	}
+	adsMonitor := ads.NewMonitor(cfg.ADS.Enabled, adsFreshness)
 
 	// --- Fermentation store ---
 	fermentationStore, err := fermentation.NewSQLiteStore(cfg.Fermentation.DatabasePath)
@@ -84,14 +90,18 @@ func RunServer(log zerolog.Logger) error {
 	if cfg.ADS.Enabled {
 		adsCandidate, adsErr := ads.NewClient(cfg.ADS)
 		if adsErr != nil {
+			adsMonitor.Rejected("connect_failed")
 			log.Warn().Err(adsErr).Msg("⚠️ ADS verification unavailable; continuing without ADS")
 		} else if adsErr = adsCandidate.Connect(ctx); adsErr != nil {
+			adsMonitor.Rejected("connect_failed")
 			_ = adsCandidate.Close()
 			log.Warn().Err(adsErr).Msg("⚠️ ADS PLC unreachable; continuing without ADS")
 		} else if adsErr = adsCandidate.ReadState(ctx); adsErr != nil {
+			adsMonitor.Rejected("read_state_failed")
 			_ = adsCandidate.Close()
 			log.Warn().Err(adsErr).Msg("⚠️ ADS state check failed; continuing without ADS")
 		} else if adsErr = adsCandidate.LookupInputs(ctx); adsErr != nil {
+			adsMonitor.Rejected("symbol_lookup_failed")
 			_ = adsCandidate.Close()
 			log.Warn().Err(adsErr).Msg("⚠️ ADS input symbol unavailable; continuing without ADS")
 		} else {
@@ -102,13 +112,14 @@ func RunServer(log zerolog.Logger) error {
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
-				runADSInputVerification(ctx, adsCandidate, log)
+				runADSInputVerification(ctx, adsCandidate, adsMonitor, log)
 			}()
 		}
 	}
 
 	// --- Start HTTP/WS API server ---
 	apiServer := api.NewServer(log, client, fermentationStore)
+	apiServer.SetADSMonitor(adsMonitor)
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
@@ -143,15 +154,17 @@ func RunServer(log zerolog.Logger) error {
 	return nil
 }
 
-func runADSInputVerification(ctx context.Context, client *ads.Client, log zerolog.Logger) {
+func runADSInputVerification(ctx context.Context, client *ads.Client, monitor *ads.Monitor, log zerolog.Logger) {
 	ticker := time.NewTicker(client.PollInterval())
 	defer ticker.Stop()
 
 	for {
 		inputs, err := client.ReadInputsSnapshot(ctx)
 		if err != nil {
+			monitor.Rejected("transport_failed")
 			log.Warn().Err(err).Msg("⚠️ ADS input snapshot rejected")
 		} else {
+			monitor.Accepted(inputs.Sequence, time.Now().UTC())
 			log.Debug().Uint32("sequence", inputs.Sequence).Msg("ADS input snapshot verified")
 		}
 

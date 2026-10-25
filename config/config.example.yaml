@@ -20,6 +20,7 @@ ads:
   local_port: 10500
   request_timeout: "8s"
   poll_interval: "5s"
+  freshness_window: "30s"
 
 logging:
   level: "info" # "debug" is also a good option
