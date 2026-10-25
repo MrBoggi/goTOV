@@ -6,6 +6,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/MrBoggi/goTOV/internal/ads"
 	"github.com/MrBoggi/goTOV/internal/fermentation"
 	"github.com/MrBoggi/goTOV/internal/opcua"
 	"github.com/MrBoggi/goTOV/internal/version"
@@ -19,6 +20,7 @@ type Server struct {
 	log               zerolog.Logger
 	client            *opcua.Client
 	fermentationStore fermentation.FermentationStore
+	adsMonitor        *ads.Monitor
 
 	// Connected websocket clients
 	mu          sync.RWMutex
@@ -30,6 +32,9 @@ type Server struct {
 
 	upgrader websocket.Upgrader
 }
+
+// SetADSMonitor attaches optional read-only ADS verification diagnostics.
+func (s *Server) SetADSMonitor(monitor *ads.Monitor) { s.adsMonitor = monitor }
 
 type WSMessage struct {
 	Tag         string      `json:"tag"`
@@ -81,6 +86,7 @@ func (s *Server) Router() http.Handler {
 		w.WriteHeader(http.StatusOK)
 		_ = json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
 	})
+	r.Get("/api/ads/status", s.handleADSStatus)
 
 	// Version endpoint
 	r.Get("/api/version", func(w http.ResponseWriter, _ *http.Request) {
@@ -106,6 +112,15 @@ func (s *Server) Router() http.Handler {
 	r.Handle("/*", fileServer)
 
 	return r
+}
+
+func (s *Server) handleADSStatus(w http.ResponseWriter, _ *http.Request) {
+	monitor := s.adsMonitor
+	if monitor == nil {
+		monitor = ads.NewMonitor(false, time.Second)
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(monitor.Status(time.Now().UTC()))
 }
 
 // Start the HTTP server (blocking)

@@ -17,15 +17,16 @@ type OPCUAConfig struct {
 // ADSConfig configures the optional, read-only ADS V1 input reader.
 // It intentionally contains no output or control settings.
 type ADSConfig struct {
-	Enabled        bool   `mapstructure:"enabled"`
-	Host           string `mapstructure:"host"`
-	Port           int    `mapstructure:"port"`
-	TargetNetID    string `mapstructure:"target_net_id"`
-	TargetPort     uint16 `mapstructure:"target_port"`
-	LocalNetID     string `mapstructure:"local_net_id"`
-	LocalPort      uint16 `mapstructure:"local_port"`
-	RequestTimeout string `mapstructure:"request_timeout"`
-	PollInterval   string `mapstructure:"poll_interval"`
+	Enabled         bool   `mapstructure:"enabled"`
+	Host            string `mapstructure:"host"`
+	Port            int    `mapstructure:"port"`
+	TargetNetID     string `mapstructure:"target_net_id"`
+	TargetPort      uint16 `mapstructure:"target_port"`
+	LocalNetID      string `mapstructure:"local_net_id"`
+	LocalPort       uint16 `mapstructure:"local_port"`
+	RequestTimeout  string `mapstructure:"request_timeout"`
+	PollInterval    string `mapstructure:"poll_interval"`
+	FreshnessWindow string `mapstructure:"freshness_window"`
 }
 
 // LoggingConfig definerer loggnivå og andre loggerinnstillinger.
@@ -90,6 +91,7 @@ func Load(path string) (*Config, error) {
 	v.SetDefault("ads.local_port", 10500)
 	v.SetDefault("ads.request_timeout", "8s")
 	v.SetDefault("ads.poll_interval", "5s")
+	v.SetDefault("ads.freshness_window", "30s")
 
 	// 2. Konfigurer lesing fra fil
 	if path != "" {
