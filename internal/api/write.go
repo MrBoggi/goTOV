@@ -28,6 +28,11 @@ func (s *Server) handleWrite(w http.ResponseWriter, r *http.Request) {
 		Interface("value", req.Value).
 		Msg("📝 Write request received")
 
+	if s.client == nil {
+		http.Error(w, "OPC UA is currently unavailable", http.StatusServiceUnavailable)
+		return
+	}
+
 	if err := s.client.WriteNodeValue(r.Context(), req.Tag, req.Value); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return

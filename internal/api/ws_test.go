@@ -58,6 +58,19 @@ func TestHealthCheckEndpoint(t *testing.T) {
 	assert.Equal(t, "application/json", rr.Header().Get("Content-Type"))
 }
 
+func TestWriteReturnsServiceUnavailableWithoutOPCUA(t *testing.T) {
+	log := logger.New()
+	server := NewServer(log, nil, &MockFermentationStore{})
+
+	req := httptest.NewRequest(http.MethodPost, "/api/write", bytes.NewBufferString(`{"tag":"test","value":1}`))
+	req.Header.Set("Content-Type", "application/json")
+	rr := httptest.NewRecorder()
+
+	server.Router().ServeHTTP(rr, req)
+
+	assert.Equal(t, http.StatusServiceUnavailable, rr.Code)
+}
+
 func TestSaveFermentationPlanEndpoint(t *testing.T) {
 	log := logger.New()
 	mockStore := &MockFermentationStore{
