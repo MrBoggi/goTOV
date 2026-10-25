@@ -14,6 +14,20 @@ type OPCUAConfig struct {
 	Password string `mapstructure:"password"`
 }
 
+// ADSConfig configures the optional, read-only ADS V1 input reader.
+// It intentionally contains no output or control settings.
+type ADSConfig struct {
+	Enabled        bool   `mapstructure:"enabled"`
+	Host           string `mapstructure:"host"`
+	Port           int    `mapstructure:"port"`
+	TargetNetID    string `mapstructure:"target_net_id"`
+	TargetPort     uint16 `mapstructure:"target_port"`
+	LocalNetID     string `mapstructure:"local_net_id"`
+	LocalPort      uint16 `mapstructure:"local_port"`
+	RequestTimeout string `mapstructure:"request_timeout"`
+	PollInterval   string `mapstructure:"poll_interval"`
+}
+
 // LoggingConfig definerer loggnivå og andre loggerinnstillinger.
 type LoggingConfig struct {
 	Level string `mapstructure:"level"`
@@ -49,6 +63,7 @@ type ServerConfig struct {
 // Config er toppnivåstrukturen for YAML-konfigurasjonen.
 type Config struct {
 	OPCUA        OPCUAConfig        `mapstructure:"opcua"`
+	ADS          ADSConfig          `mapstructure:"ads"`
 	Logging      LoggingConfig      `mapstructure:"logging"`
 	Fermentation FermentationConfig `mapstructure:"fermentation"`
 	Brewfather   BrewfatherConfig   `mapstructure:"brewfather"`
@@ -69,6 +84,12 @@ func Load(path string) (*Config, error) {
 	v.SetDefault("fermentation.hysteresis.heating", 0.3)
 	v.SetDefault("fermentation.step_check_interval", "30s")
 	v.SetDefault("fermentation.stabilization_time", "10m")
+	v.SetDefault("ads.enabled", false)
+	v.SetDefault("ads.port", 48898)
+	v.SetDefault("ads.target_port", 851)
+	v.SetDefault("ads.local_port", 10500)
+	v.SetDefault("ads.request_timeout", "8s")
+	v.SetDefault("ads.poll_interval", "5s")
 
 	// 2. Konfigurer lesing fra fil
 	if path != "" {

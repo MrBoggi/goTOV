@@ -6,7 +6,9 @@ import (
 	"os/signal"
 	"sync"
 	"syscall"
+	"time"
 
+	"github.com/MrBoggi/goTOV/internal/ads"
 	"github.com/MrBoggi/goTOV/internal/api"
 	"github.com/MrBoggi/goTOV/internal/config"
 	"github.com/MrBoggi/goTOV/internal/fermentation"
@@ -76,6 +78,35 @@ func RunServer(log zerolog.Logger) error {
 	// --- Waitgroup for graceful shutdown ---
 	var wg sync.WaitGroup
 
+	// --- Optional ADS V1 input verification ---
+	// This is intentionally independent of OPC UA and never changes API or
+	// control behaviour. A missing ADS route is a degraded optional integration.
+	if cfg.ADS.Enabled {
+		adsCandidate, adsErr := ads.NewClient(cfg.ADS)
+		if adsErr != nil {
+			log.Warn().Err(adsErr).Msg("⚠️ ADS verification unavailable; continuing without ADS")
+		} else if adsErr = adsCandidate.Connect(ctx); adsErr != nil {
+			_ = adsCandidate.Close()
+			log.Warn().Err(adsErr).Msg("⚠️ ADS PLC unreachable; continuing without ADS")
+		} else if adsErr = adsCandidate.ReadState(ctx); adsErr != nil {
+			_ = adsCandidate.Close()
+			log.Warn().Err(adsErr).Msg("⚠️ ADS state check failed; continuing without ADS")
+		} else if adsErr = adsCandidate.LookupInputs(ctx); adsErr != nil {
+			_ = adsCandidate.Close()
+			log.Warn().Err(adsErr).Msg("⚠️ ADS input symbol unavailable; continuing without ADS")
+		} else {
+			defer func() {
+				_ = adsCandidate.Close()
+				log.Info().Msg("🔌 ADS client closed")
+			}()
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				runADSInputVerification(ctx, adsCandidate, log)
+			}()
+		}
+	}
+
 	// --- Start HTTP/WS API server ---
 	apiServer := api.NewServer(log, client, fermentationStore)
 	wg.Add(1)
@@ -110,4 +141,24 @@ func RunServer(log zerolog.Logger) error {
 	log.Info().Msg("👋 goTØV backend stopped cleanly")
 
 	return nil
+}
+
+func runADSInputVerification(ctx context.Context, client *ads.Client, log zerolog.Logger) {
+	ticker := time.NewTicker(client.PollInterval())
+	defer ticker.Stop()
+
+	for {
+		inputs, err := client.ReadInputsSnapshot(ctx)
+		if err != nil {
+			log.Warn().Err(err).Msg("⚠️ ADS input snapshot rejected")
+		} else {
+			log.Debug().Uint32("sequence", inputs.Sequence).Msg("ADS input snapshot verified")
+		}
+
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+		}
+	}
 }
