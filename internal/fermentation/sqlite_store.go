@@ -105,8 +105,6 @@ VALUES (?, ?, ?, ?, ?, ?)`,
 	return planID, nil
 }
 
-
-
 func (s *SQLiteStore) StartFermentation(planID int64, tankID string) (int64, error) {
 	var plan FermentationPlan
 	err := s.DB.Get(&plan, "SELECT id, name, recipe_id, total_steps FROM fermentation_plans WHERE id = ?", planID)
