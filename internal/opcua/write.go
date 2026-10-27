@@ -40,3 +40,9 @@ func (c *Client) WriteNodeValue(ctx context.Context, nodeID string, value interf
 	c.log.Info().Msgf("✅ Wrote %v to %s", value, nodeID)
 	return nil
 }
+
+// WriteTag preserves the fermentation controller's existing symbolic OPC UA
+// write boundary while delegating to the current checked write implementation.
+func (c *Client) WriteTag(ctx context.Context, nodeID string, value interface{}) error {
+	return c.WriteNodeValue(ctx, nodeID, value)
+}

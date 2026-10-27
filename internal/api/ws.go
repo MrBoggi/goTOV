@@ -20,6 +20,7 @@ type Server struct {
 	log               zerolog.Logger
 	client            *opcua.Client
 	fermentationStore fermentation.FermentationStore
+	engine            *fermentation.Engine
 	adsMonitor        *ads.Monitor
 
 	// Connected websocket clients
@@ -36,6 +37,9 @@ type Server struct {
 // SetADSMonitor attaches optional read-only ADS verification diagnostics.
 func (s *Server) SetADSMonitor(monitor *ads.Monitor) { s.adsMonitor = monitor }
 
+// FermentationEngine exposes the lifecycle-owned engine to the application.
+func (s *Server) FermentationEngine() *fermentation.Engine { return s.engine }
+
 type WSMessage struct {
 	Tag         string      `json:"tag"`
 	DisplayName string      `json:"display_name"`
@@ -50,6 +54,7 @@ func NewServer(log zerolog.Logger, client *opcua.Client, fermentationStore ferme
 		log:               log,
 		client:            client,
 		fermentationStore: fermentationStore,
+		engine:            fermentation.NewEngine(fermentationStore, client, log),
 		subscribers:       make(map[*websocket.Conn]bool),
 		latest:            make(map[string]WSMessage),
 		upgrader: websocket.Upgrader{
@@ -101,8 +106,19 @@ func (s *Server) Router() http.Handler {
 	r.Get("/api/tags", s.handleSnapshot)
 	r.Post("/api/write", s.handleWrite)
 	r.Post("/api/fermentation/plan", s.handleSaveFermentationPlan)
+	r.Put("/api/fermentation/plan/{id}", s.handleUpdateFermentationPlan)
+	r.Get("/api/fermentation/plan", s.handleListFermentationPlans)
 	r.Get("/api/fermentation/plans", s.handleListFermentationPlans)
 	r.Post("/api/fermentation/start", s.handleStartFermentation)
+	r.Post("/api/fermentation/stop", s.handleStopFermentation)
+	r.Post("/api/fermentation/event/complete", s.handleCompleteFermentationEvent)
+	r.Post("/api/fermentation/mode", s.handleSetFermentationMode)
+	r.Post("/api/fermentation/active/{id}/manual", s.handleSetManualControl)
+	r.Put("/api/fermentation/active/{id}/step", s.handleUpdateActiveFermentationStep)
+	r.Get("/api/fermentation/status", s.handleGetFermentationStatus)
+	r.Get("/api/fermentation/history/{id}", s.handleGetFermentationHistory)
+	r.Get("/api/fermentation/docs", s.handleGetApiDocs)
+	r.Delete("/api/fermentation/plan/{id}", s.handleDeleteFermentationPlan)
 	r.Get("/api/tanks", s.handleListTanks)
 
 	// ----------------------------------------------------
