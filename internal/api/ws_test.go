@@ -14,9 +14,10 @@ import (
 
 // MockFermentationStore is a mock implementation of fermentation.FermentationStore for testing.
 type MockFermentationStore struct {
+	fermentation.FermentationStore
 	SavePlanFunc          func(plan fermentation.FermentationPlan) (int64, error)
 	ListPlansFunc         func() ([]fermentation.FermentationPlan, error)
-	StartFermentationFunc func(planID int64, tankID string) (int64, error)
+	StartFermentationFunc func(planID int64, tankID, batchID string) (int64, error)
 }
 
 func (m *MockFermentationStore) SavePlan(plan fermentation.FermentationPlan) (int64, error) {
@@ -33,11 +34,15 @@ func (m *MockFermentationStore) ListPlans() ([]fermentation.FermentationPlan, er
 	return nil, nil // Default return for testing
 }
 
-func (m *MockFermentationStore) StartFermentation(planID int64, tankID string) (int64, error) {
+func (m *MockFermentationStore) StartFermentation(planID int64, tankID, batchID string) (int64, error) {
 	if m.StartFermentationFunc != nil {
-		return m.StartFermentationFunc(planID, tankID)
+		return m.StartFermentationFunc(planID, tankID, batchID)
 	}
 	return 1, nil // Default return for testing
+}
+
+func (m *MockFermentationStore) ListActiveFermentations() ([]fermentation.FermentationState, error) {
+	return nil, nil
 }
 
 func TestHealthCheckEndpoint(t *testing.T) {
@@ -107,7 +112,7 @@ func TestSaveFermentationPlanEndpoint(t *testing.T) {
 	err = json.Unmarshal(rr.Body.Bytes(), &responseMap)
 	assert.NoError(t, err)
 	assert.Equal(t, "ok", responseMap["status"])
-	assert.Equal(t, float64(42), responseMap["planID"]) // JSON numbers are often float64
+	assert.Equal(t, float64(42), responseMap["planId"]) // JSON numbers are often float64
 }
 
 func TestListFermentationPlansEndpoint(t *testing.T) {
@@ -158,7 +163,7 @@ func TestListFermentationPlansEndpoint(t *testing.T) {
 func TestStartFermentationEndpoint(t *testing.T) {
 	log := logger.New()
 	mockStore := &MockFermentationStore{
-		StartFermentationFunc: func(planID int64, tankID string) (int64, error) {
+		StartFermentationFunc: func(planID int64, tankID, batchID string) (int64, error) {
 			assert.Equal(t, int64(123), planID)
 			assert.Equal(t, "TANK_ALPHA_001", tankID)
 			return 789, nil // Simulate a new fermentation ID
@@ -186,7 +191,7 @@ func TestStartFermentationEndpoint(t *testing.T) {
 	err = json.Unmarshal(rr.Body.Bytes(), &responseMap)
 	assert.NoError(t, err)
 	assert.Equal(t, "ok", responseMap["status"])
-	assert.Equal(t, float64(789), responseMap["fermentationID"])
+	assert.Equal(t, float64(789), responseMap["fermentationId"])
 }
 
 func TestListTanksEndpoint(t *testing.T) {
@@ -202,8 +207,8 @@ func TestListTanksEndpoint(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, rr.Code)
 
-	expectedTanks := []string{"TANK_ALPHA_001", "TANK_BETA_002", "TANK_GAMMA_003"}
-	var actualTanks []string
+	expectedTanks := []map[string]string{{"id": "1", "name": "Tank 1 (Fermenter 1)"}, {"id": "2", "name": "Tank 2 (Fermenter 2)"}}
+	var actualTanks []map[string]string
 	err = json.Unmarshal(rr.Body.Bytes(), &actualTanks)
 	assert.NoError(t, err)
 	assert.Equal(t, expectedTanks, actualTanks)

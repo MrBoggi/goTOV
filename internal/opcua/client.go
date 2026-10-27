@@ -106,6 +106,12 @@ func (c *Client) Close() error {
 	return c.conn.Close(context.Background())
 }
 
+// IsConnected reports whether the OPC UA session is available for the legacy
+// fermentation controller. Callers still handle individual read/write failures.
+func (c *Client) IsConnected() bool {
+	return c != nil && c.conn != nil && c.conn.State() == opcua.Connected
+}
+
 // ReadNodeValue reads a single node value and returns the raw value (interface{}).
 func (c *Client) ReadNodeValue(ctx context.Context, nodeID string) (interface{}, error) {
 	id, err := ua.ParseNodeID(nodeID)

@@ -1,594 +1,67 @@
+# goTØV
 
-# 🍺 goTØV – Go Tæsse Øl Verksted
+goTØV er backend for bryggeriets prosess- og vedlikeholdsfunksjoner. Tjenesten tilbyr HTTP- og WebSocket-API, lagrer driftsdata i SQLite og kommuniserer med PLC-en via OPC UA.
 
-**goTØV** er et modulært og utvidbart bryggeri-automatiseringssystem skrevet i **Go**, integrert med  
-**Beckhoff CX8190 / TwinCAT via OPC UA**, og med en Docker‑klar kjernestack (TimescaleDB, Grafana, MQTT).
+## Lokal kjøring
 
----
-
-## ⚙️ Quick Start
+Krever Go-versjonen angitt i `go.mod` og en konfigurasjonsfil.
 
 ```bash
-# Clone repo
-git clone https://github.com/MrBoggi/goTOV.git
-cd goTOV
-
-# Install dependencies
-go mod tidy
-
-# Run backend (OPC UA edge controller)
+go test ./...
 go run ./cmd/gotov server
 ```
 
-Eksempel output:
+Eksempelkonfigurasjon ligger i `config/config.example.yaml`. Ikke legg passord, sertifikater eller produksjonsendepunkter i Git.
 
-```
-INF Connected to Beckhoff PLC via OPC UA
-INF Temp_HLT = 133 (type int16)
-```
+## Helse og API
 
----
+`GET /health` svarer bare på om backendprosessen er oppe. PLC-tilkobling og ADS-telemetri eksponeres separat, slik at en levende prosess ikke feilaktig tolkes som tilgjengelig prosesskontroll.
 
-## 🧩 Struktur
+Viktige endepunkter:
 
-```
-goTOV/
-├── cmd/gotov/          # CLI-verktøy + server (brewfather, fermentation-db, osv.)
-├── internal/api/       # Web API / WS
-├── internal/opcua/     # OPC UA klient
-├── internal/brewfather # Brewfather klient, parser, batch/recipe-funksjoner
-├── internal/fermentation # Fermentering: SQLite store, typer, logikk
-├── internal/logger     # Zerolog-baserte logger
-├── internal/config     # YAML config loader
-└── data/               # Lokale SQLite databaser
-```
+- `GET /health` – prosesshelse.
+- `GET /api/ads/status` – ADS V1-leserens tilstand, siste gyldige prøve og eventuelle feil.
+- `/api/fermentation/*` – gjæringsplaner, aktive gjæringer og kontrollstatus.
+- `/ws` – WebSocket-oppdateringer til GUI.
 
----
+## PLC-integrasjon
 
-## 🧠 Highlights
+### OPC UA – aktiv kontrollvei
 
-- ⚡ Realtime OPC UA kommunikasjon mot Beckhoff CX8190  
-- 🏷 Automatisk tag discovery (`ListSymbols`)  
-- 🔌 Web API + WebSocket sanntidsstrøm  
-- 🧪 Brewfather integrasjon (recipes + batches)  
-- 🧬 Importer fermenteringsprofiler direkte til SQLite  
-- 🧱 Ryddig Go‑arkitektur i `internal/`  
+OPC UA er den aktive veien for gjæringskontroll. Den historiske gjæringsmotoren kjører i backend når serveren starter og gjenoppretter aktive gjæringer fra SQLite. Den leser temperaturer og skriver ventiler, varme og glykolpumpe via de etablerte UA-nodene.
 
----
+Temperaturregulering bruker reseptens settpunkt med ±0,3 °C hysterese. For hver tank kan kjøling og varme aldri være aktive samtidig. Glykolkoordinatoren bruker følgende sekvens:
 
-# 📦 Brewfather CLI – Fermentering & Batch-verktøy
+1. Slå av tankens varme før kjølebehovet publiseres.
+2. Åpne korrekt kjøleventil og bekreft lokal tilstand.
+3. Start først pumpen etter forsinkelse og bare når minst én ventil er bekreftet åpen.
+4. Ved stopp: stans pumpen før ventiler stenges.
 
-goTØV inkluderer et komplett sett CLI‑kommandoer for å jobbe med Brewfather.
+Dermed skal pumpen ikke startes mot lukkede ventiler. Flere tanker kan kjøle samtidig, og en annen tank kan varme, men én og samme tank kan ikke varme og kjøle samtidig.
 
-Kommandoene kan kjøres på to måter:
-1.  **Med `go run`** (enklest for utvikling): `go run ./cmd/gotov <kommando>`
-2.  **Som bygget binærfil** (anbefalt for jevnlig bruk):
-    ```bash
-    # Bygg binærfilen én gang
-    go build -o gotov ./cmd/gotov
+### ADS V1 – kun lesing og observasjon
 
-    # Kjør kommandoer direkte
-    ./gotov <kommando>
-    ```
+ADS V1 er en valgfri, feature-flaggstyrt leser av de binære PLC-inputene. Den kan slås på med `ads.enabled`, men den skriver aldri PLC-utganger og erstatter ikke OPC UA-kontrollen. Status finnes på `/api/ads/status`.
 
-Nedenfor brukes `go run`-metoden for enkelhets skyld.
+Det versjonerte grensesnittet, binary-layout, testvektorer og kompatibilitetsregler eies av [`goTOV-Interfaces/ads/v1`](../goTOV-Interfaces/ads/v1/). Endringer på tvers av repoer skal gjøres der først. ADS V2 er foreløpig en spesifikasjon; den autoriserer ikke produksjonsskriving.
 
----
+## Data og gjenoppretting
 
-## 🧪 1. List Brewfather batches
+SQLite lagrer gjæringsplaner, aktive steg, hendelser, tilstandsdata og historikk. Ved oppstart leser motoren aktive gjæringer fra databasen. Den synkroniserer deretter kjent pumpe-, ventil- og varmetilstand fra PLC-en før den fortsetter reguleringen.
+
+## Utvikling
+
+Kjør før pull request:
 
 ```bash
-go run ./cmd/gotov brewfather-batches
+gofmt -w .
+go test ./...
+go vet ./...
+go build ./...
 ```
 
-Output:
+Produksjonsutrulling skjer kun via GitHub Actions etter merge til `main`. Ikke bygg eller start produksjonscontainere manuelt på runneren. Etter deploy verifiseres prosessen med `GET http://192.168.10.115:18085/health`; dette er ikke en godkjenning av PLC-skriving.
 
-```
-BATCH ID                        NAME
-KeRcvtkWQCgXyIC50pQkn1O0dDcY2b  Cactus Sombrero
-CgQogdpjMQM75PfjDXHZBrd1LU8iWL  Medouche-aaah
-...
-```
+## Videre ADS-arbeid
 
-Dette brukes til å finne batch-ID du ønsker å importere.
-
----
-
-## 🍺 2. Importer fermenteringsprofil
-
-```bash
-go run ./cmd/gotov fermentation-import <batch-id>
-```
-
-Eksempel:
-
-```bash
-go run ./cmd/gotov fermentation-import KeRcvtkWQCgXyIC50pQkn1O0dDcY2b
-```
-
-Dette gjør:
-
-1.  Henter batch fra Brewfather
-2.  Tar fermenteringssteg fra batch → fallback recipe
-3.  Konverterer time/days → *timer*
-4.  Lagrer planen i **data/fermentation.db**
-
-Output:
-
-```
-INF Fermentation plan imported successfully name=Cactus Sombrero steps=4
-```
-
----
-
-## 🗄️ 3. Sjekk lokal fermenteringsdatabase
-
-List alle tilgjengelige planer:
-
-```bash
-go run ./cmd/gotov fermentation-db plans
-```
-
-List steg for én plan:
-
-```bash
-go run ./cmd/gotov fermentation-db steps <plan-id>
-```
-
-
----
-
-## 🧹 4. Tøm fermenteringsdatabase
-
-```bash
-go run ./cmd/gotov fermentation-db clear
-```
-
----
-
-## 🔧 Filplasseringer
-
-| Fil | Beskrivelse |
-|-----|-------------|
-| `internal/brewfather/` | Brewfather API-klient, batch/recipe/fermentation parsing |
-| `internal/fermentation/` | SQLite-lagring for fermenteringsplaner |
-| `cmd/gotov/` | CLI‑kommandoer definert via Cobra |
-| `config/config.yaml` | OPC UA + Brewfather config |
-
----
-
-## 🔐 Configuration
-
-I `config/config.yaml`:
-
-```yaml
-# OPC UA server
-opcua:
-  endpoint: "opc.tcp://192.168.1.10:4840"
-  username: "your-username"
-  password: "your-password"
-
-# Web server
-server:
-  listen_addr: ":8080"
-
-# Brewfather API
-brewfather:
-  user_id: "YOUR_USER_ID"
-  api_key: "YOUR_API_KEY"
-```
-
----
-
-## 🐳 Docker
-
-Prosjektet er fullt ut "dockerized" og kan kjøres med `docker-compose`.
-
-```bash
-# Bygg og start goTOV-containeren
-docker-compose up --build
-```
-
-### Production Stack (TimescaleDB + Grafana)
-
-For produksjon kan du aktivere `production`-profilen som inkluderer TimescaleDB og Grafana:
-
-```bash
-docker-compose --profile production up --build
-```
-
-Dette starter:
-- `gotov`: Applikasjonen (port 8085)
-- `timescaledb`: TimescaleDB database (port 5432)
-- `grafana`: Grafana (port 3000)
-
----
-
-## 🧱 Roadmap
-
-| Status | Beskrivelse |
-|--------|-------------|
-| ✅ | OPC UA core, Brewfather import, SQLite |
-| 🔧 | Fermenteringsmotor med step-tracking |
-| 🔜 | GUI‑integrasjon |
-| 🔮 | Full bryggeprosess motor |
-
----
-
----
-
-## 🌐 API Endpoints
-
-goTØV provides a RESTful API and a WebSocket stream for interacting with the system and OPC UA tags.
-
-### Health Checks
-
-*   **`GET /healthz`**
-    *   **Description:** A basic health check endpoint.
-    *   **Response:** `ok` (plain text)
-    *   **Example (curl):**
-        ```bash
-        curl http://localhost:8080/healthz
-        ```
-    *   **Example Response:**
-        ```
-        ok
-        ```
-
-*   **`GET /health`**
-    *   **Description:** Provides a health status in JSON format.
-    *   **Response:** `{"status": "ok"}` (JSON)
-    *   **Example (curl):**
-        ```bash
-        curl http://localhost:8080/health
-        ```
-    *   **Example Response:**
-        ```json
-        {"status": "ok"}
-        ```
-
-### System Information
-
-*   **`GET /api/version`**
-    *   **Description:** Returns the current version of the goTØV application.
-    *   **Response:** `{"version": "..."}` (JSON)
-    *   **Example (curl):**
-        ```bash
-        curl http://localhost:8080/api/version
-        ```
-    *   **Example Response:**
-        ```json
-        {"version": "v1.0.0"}
-        ```
-
-### OPC UA Tag Interaction
-
-*   **`GET /api/tags`**
-    *   **Description:** Returns a snapshot of the latest known OPC UA tag values.
-    *   **Response:** A JSON object where keys are tag names and values are `WSMessage` objects.
-        ```json
-        {
-            "Tag_Name_1": {
-                "tag": "Tag_Name_1",
-                "display_name": "Display Name 1",
-                "value": "Current Value 1",
-                "value_type": "string",
-                "ts_ms": 1678886400000
-            },
-            "Tag_Name_2": {
-                "tag": "Tag_Name_2",
-                "display_name": "Display Name 2",
-                "value": 123.45,
-                "value_type": "float64",
-                "ts_ms": 1678886400100
-            }
-        }
-        ```
-    *   **Example (curl):**
-        ```bash
-        curl http://localhost:8080/api/tags
-        ```
-    *   **Example Response:**
-        ```json
-        {
-            "Mixer.Temp": {
-                "tag": "Mixer.Temp",
-                "display_name": "Mixer Temperature",
-                "value": 25.5,
-                "value_type": "float64",
-                "ts_ms": 1701388800000
-            },
-            "Pump.Status": {
-                "tag": "Pump.Status",
-                "display_name": "Pump Operational Status",
-                "value": true,
-                "value_type": "bool",
-                "ts_ms": 1701388800100
-            }
-        }
-        ```
-
-*   **`POST /api/write`**
-    *   **Description:** Writes a new value to a specified OPC UA tag. If the tag does not start with `ns=`, `ns=4;s=` will be automatically prefixed.
-    *   **Method:** `POST`
-    *   **Request Body (JSON):**
-        ```json
-        {
-            "tag": "Your.OPC.UA.Tag",
-            "value": "New Value"
-        }
-        ```
-    *   **Response:** `{"status": "ok"}` (JSON) on success.
-    *   **Example (curl):**
-        ```bash
-        curl -X POST -H "Content-Type: application/json" \
-             -d '{"tag": "Mixer.SetPoint", "value": 60.0}' \
-             http://localhost:8080/api/write
-        ```
-    *   **Example Response:**
-        ```json
-        {"status": "ok"}
-        ```
-
-### Fermentation Plan Management
-
-*   **`POST /api/fermentation/plan`**
-    *   **Description:** Creates and saves a new fermentation plan.
-    *   **Method:** `POST`
-    *   **Request Body (JSON):**
-        ```json
-        {
-            "name": "My Custom Fermentation Plan",
-            "recipe_id": "CUSTOM_RECIPE_001",
-            "steps": [
-                {
-                    "step_number": 1,
-                    "temperature": 18.5,
-                    "duration_hours": 72.0,
-                    "description": "Primary Fermentation",
-                    "type": "Ferment"
-                },
-                {
-                    "step_number": 2,
-                    "temperature": 2.0,
-                    "duration_hours": 48.0,
-                    "description": "Cold Crash",
-                    "type": "Condition"
-                }
-            ]
-        }
-        ```
-    *   **Response:** `{"status": "ok", "planID": <id>}` (JSON) on success, where `<id>` is the ID of the newly created plan.
-    *   **Example (curl):**
-        ```bash
-        curl -X POST -H "Content-Type: application/json" \
-             -d '{
-                 "name": "IPA Fermentation Profile",
-                 "recipe_id": "IPA_001",
-                 "steps": [
-                     {"step_number": 1, "temperature": 19.0, "duration_hours": 120.0, "description": "Active Fermentation", "type": "Ferment"},
-                     {"step_number": 2, "temperature": 3.0, "duration_hours": 48.0, "description": "Dry Hop + Cold Crash", "type": "Condition"}
-                 ]
-             }' \
-             http://localhost:8080/api/fermentation/plan
-        ```
-    *   **Example Response:**
-        ```json
-        {"status": "ok", "planID": 123}
-        ```
-
-*   **`GET /api/fermentation/plans`**
-    *   **Description:** Returns a list of all stored fermentation plans.
-    *   **Method:** `GET`
-    *   **Response:** An array of fermentation plan objects.
-        ```json
-        [
-            {
-                "id": 123,
-                "name": "IPA Fermentation Profile",
-                "recipe_id": "IPA_001",
-                "total_steps": 2,
-                "steps": [
-                    {"step_number": 1, "temperature": 19.0, "duration_hours": 120.0, "description": "Active Fermentation", "type": "Ferment"},
-                    {"step_number": 2, "temperature": 3.0, "duration_hours": 48.0, "description": "Dry Hop + Cold Crash", "type": "Condition"}
-                ]
-            }
-        ]
-        ```
-    *   **Example (curl):**
-        ```bash
-        curl http://localhost:8080/api/fermentation/plans
-        ```
-    *   **Example Response:**
-        ```json
-        [
-            {
-                "id": 1,
-                "name": "My Custom Fermentation Plan",
-                "recipe_id": "CUSTOM_RECIPE_001",
-                "total_steps": 2,
-                "steps": [
-                    {"step_number": 1, "temperature": 18.5, "duration_hours": 72, "description": "Primary Fermentation", "type": "Ferment"},
-                    {"step_number": 2, "temperature": 2, "duration_hours": 48, "description": "Cold Crash", "type": "Condition"}
-                ]
-            }
-        ]
-        ```
-
-### Fermentation Plan Management
-
-*   **`POST /api/fermentation/plan`**
-    *   **Description:** Creates and saves a new fermentation plan.
-    *   **Method:** `POST`
-    *   **Request Body (JSON):**
-        ```json
-        {
-            "name": "My Custom Fermentation Plan",
-            "recipe_id": "CUSTOM_RECIPE_001",
-            "steps": [
-                {
-                    "step_number": 1,
-                    "temperature": 18.5,
-                    "duration_hours": 72.0,
-                    "description": "Primary Fermentation",
-                    "type": "Ferment"
-                },
-                {
-                    "step_number": 2,
-                    "temperature": 2.0,
-                    "duration_hours": 48.0,
-                    "description": "Cold Crash",
-                    "type": "Condition"
-                }
-            ]
-        }
-        ```
-    *   **Response:** `{"status": "ok", "planID": <id>}` (JSON) on success, where `<id>` is the ID of the newly created plan.
-    *   **Example (curl):**
-        ```bash
-        curl -X POST -H "Content-Type: application/json" \
-             -d '{
-                 "name": "IPA Fermentation Profile",
-                 "recipe_id": "IPA_001",
-                 "steps": [
-                     {"step_number": 1, "temperature": 19.0, "duration_hours": 120.0, "description": "Active Fermentation", "type": "Ferment"},
-                     {"step_number": 2, "temperature": 3.0, "duration_hours": 48.0, "description": "Dry Hop + Cold Crash", "type": "Condition"}
-                 ]
-             }' \
-             http://localhost:8080/api/fermentation/plan
-        ```
-    *   **Example Response:**
-        ```json
-        {"status": "ok", "planID": 123}
-        ```
-
-*   **`GET /api/fermentation/plans`**
-    *   **Description:** Returns a list of all stored fermentation plans.
-    *   **Method:** `GET`
-    *   **Response:** An array of fermentation plan objects.
-        ```json
-        [
-            {
-                "id": 123,
-                "name": "IPA Fermentation Profile",
-                "recipe_id": "IPA_001",
-                "total_steps": 2,
-                "steps": [
-                    {"step_number": 1, "temperature": 19.0, "duration_hours": 120.0, "description": "Active Fermentation", "type": "Ferment"},
-                    {"step_number": 2, "temperature": 3.0, "duration_hours": 48.0, "description": "Dry Hop + Cold Crash", "type": "Condition"}
-                ]
-            }
-        ]
-        ```
-    *   **Example (curl):**
-        ```bash
-        curl http://localhost:8080/api/fermentation/plans
-        ```
-    *   **Example Response:**
-        ```json
-        [
-            {
-                "id": 1,
-                "name": "My Custom Fermentation Plan",
-                "recipe_id": "CUSTOM_RECIPE_001",
-                "total_steps": 2,
-                "steps": [
-                    {"step_number": 1, "temperature": 18.5, "duration_hours": 72, "description": "Primary Fermentation", "type": "Ferment"},
-                    {"step_number": 2, "temperature": 2, "duration_hours": 48, "description": "Cold Crash", "type": "Condition"}
-                ]
-            }
-        ]
-        ```
-
-*   **`POST /api/fermentation/start`**
-    *   **Description:** Starts a fermentation process on a specific tank using an existing fermentation plan.
-    *   **Method:** `POST`
-    *   **Request Body (JSON):**
-        ```json
-        {
-            "planID": 123,
-            "tankID": "TANK_ALPHA_001"
-        }
-        ```
-    *   **Response:** `{"status": "ok", "fermentationID": <id>}` (JSON) on success, where `<id>` is the ID of the newly started fermentation.
-    *   **Example (curl):**
-        ```bash
-        curl -X POST -H "Content-Type: application/json" \
-             -d '{"planID": 1, "tankID": "TANK_001"}' \
-             http://localhost:8080/api/fermentation/start
-        ```
-    *   **Example Response:**
-        ```json
-        {"status": "ok", "fermentationID": 456}
-        ```
-
-### Tank Management
-
-*   **`GET /api/tanks`**
-    *   **Description:** Returns a list of available tank IDs.
-    *   **Method:** `GET`
-    *   **Response:** An array of strings, where each string is a tank ID.
-        ```json
-        [
-            "TANK_ALPHA_001",
-            "TANK_BETA_002",
-            "TANK_GAMMA_003"
-        ]
-        ```
-    *   **Example (curl):**
-        ```bash
-        curl http://localhost:8080/api/tanks
-        ```
-    *   **Example Response:**
-        ```json
-        [
-            "TANK_ALPHA_001",
-            "TANK_BETA_002",
-            "TANK_GAMMA_003"
-        ]
-        ```
-
-### Real-time Tag Stream (WebSocket)
-
-*   **`GET /api/stream/tags`**
-    *   **Description:** Establishes a WebSocket connection to receive real-time updates for all subscribed OPC UA tags. Each message received will be a `WSMessage` object.
-    *   **Protocol:** WebSocket (`ws://` or `wss://`)
-    *   **Messages:** Each message is a JSON object representing a `WSMessage` struct:
-        ```json
-        {
-            "tag": "Tag_Name",
-            "display_name": "Display Name",
-            "value": "Current Value",
-            "value_type": "string",
-            "ts_ms": 1678886400000
-        }
-        ```
-    *   **Example (JavaScript - simplified):**
-        ```javascript
-        const ws = new WebSocket("ws://localhost:8080/api/stream/tags");
-
-        ws.onopen = () => {
-            console.log("WebSocket connected!");
-        };
-
-        ws.onmessage = (event) => {
-            const data = JSON.parse(event.data);
-            console.log("Received tag update:", data);
-            // Example: { "tag": "Tank1.Level", "display_name": "Tank 1 Level", "value": 75.2, "value_type": "float64", "ts_ms": 1701388800500 }
-        };
-
-        ws.onclose = () => {
-            console.log("WebSocket disconnected.");
-        };
-
-        ws.onerror = (error) => {
-            console.error("WebSocket error:", error);
-        };
-        ```
-
----
-
-
----
-
-© 2025 Tæsse ØlVerksted – Brew smarter 🍺
+ADS-skriving, valg mellom UA og ADS i GUI, og PLC-eierskap kan først innføres når PLC-prosjektet har en eksplisitt ADS-mottaker, watchdog/timeout, arbitrering mot eksisterende UA-skriving og en bekreftet sikker fallback. Disse kontraktene og testene skal versjoneres i `goTOV-Interfaces` før backend eller GUI bruker dem.

@@ -120,6 +120,8 @@ func RunServer(log zerolog.Logger) error {
 	// --- Start HTTP/WS API server ---
 	apiServer := api.NewServer(log, client, fermentationStore)
 	apiServer.SetADSMonitor(adsMonitor)
+	apiServer.FermentationEngine().Start()
+	defer apiServer.FermentationEngine().Stop()
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
