@@ -1,0 +1,125 @@
+package fermentationads
+
+import (
+	"context"
+	"errors"
+	"sync"
+	"testing"
+	"time"
+)
+
+type fakeLink struct {
+	mu            sync.Mutex
+	commands      []Command
+	failAt        int
+	forceMismatch bool
+}
+
+func (f *fakeLink) WriteCommand(_ context.Context, c Command) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.commands = append(f.commands, c)
+	if len(f.commands) == f.failAt {
+		return errors.New("write failed")
+	}
+	return nil
+}
+func (f *fakeLink) current() Command {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.commands[len(f.commands)-1]
+}
+func (f *fakeLink) ReadStatus(context.Context) (Status, error) {
+	c := f.current()
+	return Status{Session: c.Session, AppliedSequence: c.Sequence, WatchdogHealthy: true, Enabled: c.Enable, Valid: true, Owner: ADS}, nil
+}
+func (f *fakeLink) ReadApplied(context.Context) (Applied, error) {
+	c := f.current()
+	out := c.Outputs
+	if f.forceMismatch && c.Enable {
+		out = Outputs{F1Cooling: true}
+	}
+	return Applied{Session: c.Session, AppliedSequence: c.Sequence, Outputs: out, Enabled: c.Enable}, nil
+}
+func TestRunDisabledHandoverThenHeartbeats(t *testing.T) {
+	f := &fakeLink{}
+	desired := make(chan Outputs, 1)
+	desired <- Outputs{F1Cooling: true}
+	ctx, cancel := context.WithCancel(context.Background())
+	observations := make(chan Observation, 5)
+	done := make(chan error, 1)
+	go func() { done <- Run(ctx, f, desired, observations) }()
+	for i := 0; i < 3; i++ {
+		select {
+		case <-observations:
+		case <-time.After(2 * time.Second):
+			t.Fatal("observation timeout")
+		}
+	}
+	cancel()
+	if err := <-done; !errors.Is(err, context.Canceled) {
+		t.Fatal(err)
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if len(f.commands) != 3 || f.commands[0].Enable || !f.commands[1].Enable || !f.commands[1].Outputs.F1Cooling {
+		t.Fatalf("commands %+v", f.commands)
+	}
+	if f.commands[0].Session == 0 || f.commands[0].Session != f.commands[2].Session || f.commands[0].Sequence != 1 || f.commands[2].Sequence != 3 {
+		t.Fatalf("session/sequence %+v", f.commands)
+	}
+}
+func TestRunStopsWritingOnError(t *testing.T) {
+	f := &fakeLink{failAt: 2}
+	desired := make(chan Outputs)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	if err := Run(ctx, f, desired, nil); err == nil {
+		t.Fatal("expected error")
+	}
+	if len(f.commands) != 2 {
+		t.Fatalf("expected no retry: %d", len(f.commands))
+	}
+}
+func TestRunAllowsTransientAppliedMismatchWhileSendingHeartbeats(t *testing.T) {
+	f := &fakeLink{forceMismatch: true}
+	desired := make(chan Outputs)
+	ctx, cancel := context.WithCancel(context.Background())
+	observations := make(chan Observation, 5)
+	done := make(chan error, 1)
+	go func() { done <- Run(ctx, f, desired, observations) }()
+	for i := 0; i < 3; i++ {
+		select {
+		case o := <-observations:
+			if i > 0 && o.Converged {
+				t.Error("expected mismatch")
+			}
+		case <-time.After(2 * time.Second):
+			t.Fatal("observation timeout")
+		}
+	}
+	cancel()
+	if err := <-done; !errors.Is(err, context.Canceled) {
+		t.Fatal(err)
+	}
+	if len(f.commands) != 3 {
+		t.Fatalf("heartbeat stopped: %d", len(f.commands))
+	}
+}
+
+func TestRunStopsAfterPersistentAppliedMismatch(t *testing.T) {
+	f := &fakeLink{forceMismatch: true}
+	desired := make(chan Outputs)
+	ctx, cancel := context.WithTimeout(context.Background(), 7*time.Second)
+	defer cancel()
+	err := Run(ctx, f, desired, nil)
+	if err == nil || errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("expected convergence failure, got %v", err)
+	}
+	f.mu.Lock()
+	count := len(f.commands)
+	f.mu.Unlock()
+	if count < 10 {
+		t.Fatalf("expected heartbeats during convergence window, got %d", count)
+	}
+}
