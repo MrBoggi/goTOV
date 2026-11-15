@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"math"
 	"reflect"
 	"time"
 )
@@ -167,9 +168,22 @@ func CompareDiagnostics(capture, reference DiagnosticReport, maxSkew time.Durati
 		if skew > maxSkew {
 			return fmt.Errorf("sample %d reference exceeds max skew", i)
 		}
-		if sample.Inputs != other.Inputs {
+		if !sameRawInputs(sample.Inputs, other.Inputs) {
 			return fmt.Errorf("sample %d sequence %d: input values or sequence differ", i, sample.Inputs.Sequence)
 		}
 	}
 	return nil
+}
+
+// sameRawInputs compares IEEE-754 payloads as well as all other fields.
+func sameRawInputs(a, b Inputs) bool {
+	if math.Float32bits(a.FlowHLT) != math.Float32bits(b.FlowHLT) ||
+		math.Float32bits(a.FlowMLT) != math.Float32bits(b.FlowMLT) ||
+		math.Float32bits(a.FlowWort) != math.Float32bits(b.FlowWort) ||
+		math.Float32bits(a.MltRecircTemp) != math.Float32bits(b.MltRecircTemp) {
+		return false
+	}
+	a.FlowHLT, a.FlowMLT, a.FlowWort, a.MltRecircTemp = 0, 0, 0, 0
+	b.FlowHLT, b.FlowMLT, b.FlowWort, b.MltRecircTemp = 0, 0, 0, 0
+	return a == b
 }

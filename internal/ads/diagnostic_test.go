@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"math"
 	"net"
 	"testing"
 	"time"
@@ -89,6 +90,7 @@ func TestCompareDiagnosticContractAndFailures(t *testing.T) {
 		mutate func(*DiagnosticReport)
 	}{
 		{"matches", func(*DiagnosticReport) {}},
+		{"signed zero mismatch", func(r *DiagnosticReport) { r.Samples[0].Inputs.FlowHLT = math.Float32frombits(0x80000000) }},
 		{"mismatch", func(r *DiagnosticReport) { r.Samples[1].Inputs.FlowWort++ }},
 		{"flag mismatch", func(r *DiagnosticReport) { r.Samples[0].Inputs.FlowHLTOutOfRange = false }},
 		{"integer mismatch", func(r *DiagnosticReport) { r.Samples[2].Inputs.GlycolChillerTemp++ }},
@@ -117,6 +119,10 @@ func TestCompareDiagnosticContractAndFailures(t *testing.T) {
 			capture, reference := evidence(t), evidence(t)
 			reference.Source = "xae"
 			reference.ReferenceEvidence = "synthetic fixture, same publisher cycles"
+			if tc.name == "signed zero mismatch" {
+				capture.Samples[0].Inputs.FlowHLT = 0
+				reference.Samples[0].Inputs.FlowHLT = 0
+			}
 			tc.mutate(&reference)
 			err := CompareDiagnostics(capture, reference, time.Second)
 			if tc.name == "matches" {
