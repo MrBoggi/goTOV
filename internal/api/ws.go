@@ -1,7 +1,9 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"sync"
 	"time"
@@ -32,6 +34,9 @@ type Server struct {
 	latest   map[string]WSMessage
 
 	upgrader websocket.Upgrader
+
+	httpServerMu sync.RWMutex
+	httpServer   *http.Server
 }
 
 // SetADSMonitor attaches optional read-only ADS verification diagnostics.
@@ -75,7 +80,7 @@ func (s *Server) Router() http.Handler {
 
 	r.Use(cors.Handler(cors.Options{
 		AllowedOrigins:   []string{"*"},
-		AllowedMethods:   []string{"GET", "POST", "OPTIONS"},
+		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
 		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-CSRF-Token"},
 		AllowCredentials: false,
 		MaxAge:           300,
@@ -140,10 +145,38 @@ func (s *Server) handleADSStatus(w http.ResponseWriter, _ *http.Request) {
 	_ = json.NewEncoder(w).Encode(monitor.Status(time.Now().UTC()))
 }
 
-// Start the HTTP server (blocking)
+// Start the HTTP server (blocking). A clean Shutdown is reported as nil.
 func (s *Server) Start(addr string) error {
 	s.log.Info().Str("addr", addr).Msg("🌐 HTTP/WS server starting")
-	return http.ListenAndServe(addr, s.Router())
+
+	server := &http.Server{
+		Addr:              addr,
+		Handler:           s.Router(),
+		ReadHeaderTimeout: 5 * time.Second,
+		IdleTimeout:       60 * time.Second,
+	}
+
+	s.httpServerMu.Lock()
+	s.httpServer = server
+	s.httpServerMu.Unlock()
+
+	err := server.ListenAndServe()
+	if errors.Is(err, http.ErrServerClosed) {
+		return nil
+	}
+	return err
+}
+
+// Shutdown stops accepting requests and waits for in-flight HTTP handlers.
+func (s *Server) Shutdown(ctx context.Context) error {
+	s.httpServerMu.RLock()
+	server := s.httpServer
+	s.httpServerMu.RUnlock()
+
+	if server == nil {
+		return nil
+	}
+	return server.Shutdown(ctx)
 }
 
 // --- Internal logic ---
