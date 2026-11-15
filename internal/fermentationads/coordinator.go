@@ -23,17 +23,53 @@ type Observation struct {
 	Converged bool
 }
 
+// Decision records when the control producer computed an output image. Producers
+// must use the local clock and renew unchanged decisions too. A buffered channel
+// must not refresh stale work just because it was received later.
+type Decision struct {
+	Outputs   Outputs
+	DecidedAt time.Time
+}
+
 // Run explicitly requests ADS ownership and keeps the watchdog alive until
 // cancellation or an error. It never requests UA ownership or retries after an
 // error. A new invocation with a new session is required for reactivation.
 // The caller must fence every UA writer before starting this method and keep
 // it fenced until the PLC is independently known to be in a safe handover.
-// desired must deliver complete, interlocked output images; the last value is
-// retained. The initial command is a disabled ADS handover with all outputs off.
-func Run(ctx context.Context, link Link, desired <-chan Outputs, observe chan<- Observation) error {
-	if link == nil || desired == nil {
-		return fmt.Errorf("link and desired channel are required")
+// desired must supply newly computed decisions before maxDecisionAge expires,
+// including repeated unchanged values. The first fresh decision is required
+// before the disabled handover; stale, future or out-of-order decisions fail closed.
+func Run(ctx context.Context, link Link, desired <-chan Decision, observe chan<- Observation, maxDecisionAge time.Duration) error {
+	if link == nil || desired == nil || maxDecisionAge <= 0 {
+		return fmt.Errorf("link, desired channel and positive decision age are required")
 	}
+	firstWait := time.NewTimer(maxDecisionAge)
+	defer firstWait.Stop()
+	var first Decision
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-firstWait.C:
+		return fmt.Errorf("first control decision expired")
+	case d, ok := <-desired:
+		if !ok {
+			return fmt.Errorf("desired channel closed")
+		}
+		first = d
+	}
+	validate := func(d Decision, previous time.Time) error {
+		now := time.Now()
+		if d.DecidedAt.IsZero() || d.DecidedAt.After(now) || !d.DecidedAt.After(previous) || !now.Before(d.DecidedAt.Add(maxDecisionAge)) {
+			return fmt.Errorf("stale, future or out-of-order control decision")
+		}
+		return nil
+	}
+	if err := validate(first, time.Time{}); err != nil {
+		return err
+	}
+	decisionDeadline := first.DecidedAt.Add(maxDecisionAge)
+	lastDecision := first.DecidedAt
+	output := first.Outputs
 	var id [4]byte
 	if _, err := rand.Read(id[:]); err != nil {
 		return fmt.Errorf("session id: %w", err)
@@ -54,7 +90,14 @@ func Run(ctx context.Context, link Link, desired <-chan Outputs, observe chan<- 
 		}
 		seq++
 		cmd := Command{Session: session, Sequence: seq, Owner: ADS, Enable: enable, Outputs: output}
-		transactionCtx, cancel := context.WithTimeout(ctx, ackTimeout)
+		if !time.Now().Before(decisionDeadline) {
+			return Observation{}, fmt.Errorf("control decision expired")
+		}
+		transactionDeadline := time.Now().Add(ackTimeout)
+		if decisionDeadline.Before(transactionDeadline) {
+			transactionDeadline = decisionDeadline
+		}
+		transactionCtx, cancel := context.WithDeadline(ctx, transactionDeadline)
 		defer cancel()
 		if err := link.WriteCommand(transactionCtx, cmd); err != nil {
 			return Observation{}, fmt.Errorf("write command: %w", err)
@@ -97,21 +140,34 @@ func Run(ctx context.Context, link Link, desired <-chan Outputs, observe chan<- 
 		default:
 		}
 	}
-	output := Outputs{}
 	var mismatchSince time.Time
 	ticker := time.NewTicker(heartbeat)
 	defer ticker.Stop()
+	expiry := time.NewTimer(time.Until(decisionDeadline))
+	defer expiry.Stop()
 	for {
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
+		case <-expiry.C:
+			return fmt.Errorf("control decision expired")
 		case next, ok := <-desired:
 			if !ok {
 				return fmt.Errorf("desired channel closed")
 			}
-			if next != output {
-				output = next
+			if err := validate(next, lastDecision); err != nil {
+				return err
 			}
+			lastDecision = next.DecidedAt
+			decisionDeadline = next.DecidedAt.Add(maxDecisionAge)
+			output = next.Outputs
+			if !expiry.Stop() {
+				select {
+				case <-expiry.C:
+				default:
+				}
+			}
+			expiry.Reset(time.Until(decisionDeadline))
 		case <-ticker.C:
 			obs, err := send(true, output)
 			if err != nil {
