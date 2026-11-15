@@ -123,3 +123,50 @@ func TestRunStopsAfterPersistentAppliedMismatch(t *testing.T) {
 		t.Fatalf("expected heartbeats during convergence window, got %d", count)
 	}
 }
+
+func TestRunStopsWhenChangingDemandNeverConverges(t *testing.T) {
+	f := &fakeLink{forceMismatch: true}
+	desired := make(chan Outputs, 1)
+	ctx, cancel := context.WithTimeout(context.Background(), 7*time.Second)
+	defer cancel()
+	go func() {
+		ticker := time.NewTicker(75 * time.Millisecond)
+		defer ticker.Stop()
+		flip := false
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				flip = !flip
+				next := Outputs{}
+				if flip {
+					next.F2Cooling = true
+				}
+				select {
+				case desired <- next:
+				default:
+				}
+			}
+		}
+	}()
+	err := Run(ctx, f, desired, nil)
+	if err == nil || errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("expected convergence failure despite changing demand, got %v", err)
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	seenOff, seenF2 := false, false
+	for _, command := range f.commands {
+		if command.Enable {
+			if command.Outputs.F2Cooling {
+				seenF2 = true
+			} else {
+				seenOff = true
+			}
+		}
+	}
+	if !seenOff || !seenF2 {
+		t.Fatal("expected both output demands to be transmitted")
+	}
+}

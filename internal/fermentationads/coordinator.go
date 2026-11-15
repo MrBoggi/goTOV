@@ -111,7 +111,6 @@ func Run(ctx context.Context, link Link, desired <-chan Outputs, observe chan<- 
 			}
 			if next != output {
 				output = next
-				mismatchSince = time.Time{}
 			}
 		case <-ticker.C:
 			obs, err := send(true, output)
