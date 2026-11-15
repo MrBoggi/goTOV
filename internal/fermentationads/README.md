@@ -62,3 +62,27 @@ only “PLC scale”; the existing engine expects floating-point temperatures in
 °C. The actual conversion is not specified by this contract or the checked-in
 PLC mapping. No scaling is assumed and the engine is not connected to these
 inputs until the scale is established and versioned.
+
+## Unresolved handover safety blocker
+
+The supervisor must not be connected to application activation in its current
+form. The UA fence is established before the first disabled ADS command is
+confirmed. If the decision stream is absent or expires, or the ADS connection
+fails or a commit's delivery is uncertain, the PLC may still own the outputs in
+UA mode with a previously active UA output. The fence then prevents the existing
+UA regulator from changing that output. The PLC's ADS watchdog only protects
+ADS ownership and does not prove that this UA-owned output is off. Conversely,
+releasing the UA fence automatically is unsafe if an in-flight ADS command could
+still acquire ownership or the target's state is unknown. Even a successful
+local context cancellation or SDK close cannot establish which command reached
+the PLC.
+
+A complete handover needs a reviewed protocol and integration that can verify
+and maintain the intended UA or PLC-safe state across this interval, deal with
+ambiguous/in-flight writes and process restarts, and keep the original regulator
+able to operate until the safe ownership transition is actually established.
+The target's reported owner, watchdog and applied image must be corroborated as
+required by commissioning; the applied image is not physical feedback. The
+current contract and available runtime evidence do not establish that recovery
+protocol. Do not auto-release the fence, infer physical SAFE from a timeout, or
+turn this draft into a production activation path.
