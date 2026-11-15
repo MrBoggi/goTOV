@@ -42,3 +42,19 @@ an in-flight commit was not delivered or that the PLC reached SAFE. UA writers
 must remain fenced until SAFE is independently confirmed and an approved
 handover occurs. Closing may take time; it is not a safety timer or substitute
 for the PLC watchdog.
+
+`opcua.Client.FenceWrites` now gates all writes through that client, including
+arbitrary API node writes and delayed fermentation callbacks; it waits for
+in-flight calls and refuses the handover if any prior UA write returned an
+uncertain result. `Supervisor` invokes this one-way fence before ADS commands
+and does not release it on error. These primitives are not connected to app
+startup or exposed as an activation endpoint. They do not fence another process,
+another UA client or an already transmitted frame. A process restart resets the
+in-memory fence, so startup ownership reconciliation and independently verified
+SAFE handover are mandatory before wiring this into production.
+
+The dedicated inputs are raw PLC `INT` values. The shared contract documents
+only “PLC scale”; the existing engine expects floating-point temperatures in
+°C. The actual conversion is not specified by this contract or the checked-in
+PLC mapping. No scaling is assumed and the engine is not connected to these
+inputs until the scale is established and versioned.

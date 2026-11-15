@@ -29,12 +29,21 @@ func (c *Client) WriteNodeValue(ctx context.Context, nodeID string, value interf
 		}},
 	}
 
-	resp, err := c.conn.Write(ctx, req)
+	err = c.writeGate.write(func() error {
+		resp, err := c.conn.Write(ctx, req)
+		if err != nil {
+			return fmt.Errorf("write failed: %w", err)
+		}
+		if resp == nil || len(resp.Results) != 1 {
+			return fmt.Errorf("write response missing result")
+		}
+		if resp.Results[0] != ua.StatusOK {
+			return fmt.Errorf("write not OK: %v", resp.Results[0])
+		}
+		return nil
+	})
 	if err != nil {
-		return fmt.Errorf("write failed: %w", err)
-	}
-	if resp.Results[0] != ua.StatusOK {
-		return fmt.Errorf("write not OK: %v", resp.Results[0])
+		return err
 	}
 
 	c.log.Info().Msgf("✅ Wrote %v to %s", value, nodeID)

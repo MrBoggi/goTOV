@@ -15,6 +15,7 @@ import (
 
 // Client wraps the underlying gopcua.Client with logging and helper methods.
 type Client struct {
+	writeGate    writeGate
 	conn         *opcua.Client
 	log          zerolog.Logger
 	Updates      chan TagUpdate    // 👈 internal event channel for tag updates
