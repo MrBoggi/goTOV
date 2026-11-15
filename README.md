@@ -65,3 +65,32 @@ Produksjonsutrulling skjer kun via GitHub Actions etter merge til `main`. Ikke b
 ## Videre ADS-arbeid
 
 ADS-skriving, valg mellom UA og ADS i GUI, og PLC-eierskap kan først innføres når PLC-prosjektet har en eksplisitt ADS-mottaker, watchdog/timeout, arbitrering mot eksisterende UA-skriving og en bekreftet sikker fallback. Disse kontraktene og testene skal versjoneres i `goTOV-Interfaces` før backend eller GUI bruker dem.
+
+### Lokal kontroll av ADS-inputklienten
+
+Klienten fra #72 skriver ingen prosessdata, utganger eller commit-sekvens.
+SDK v3.0.1 bruker Read av symbolversjon (`0xF008`), ReadState på systemservice
+og runtime, ReadWrite for inputmetadata (`0xF009`) og handle (`0xF003`), tre
+52-byte Read via handle (`0xF005`) og administrativ Write for handlefrigivelse
+(`0xF006`, offset 0, fire little-endian bytes) ved Close. Se
+[den autoritative read-only-grensen](https://github.com/MrBoggi/goTOV-Interfaces/blob/main/ads/v1/go/IMPLEMENTATION_TASK.md).
+Ingen PLC-ruteendring er tillatt; eksisterende rute er en forutsetning.
+
+Kjør `GOTOV_ADS_INTEGRATION=0 go test -v ./internal/ads -run TestClientTransport`
+for lokal loopback-test av den faktiske SDK-transporten inklusive opprydding.
+Kjør i en isolert testcontainer med `--network none`; testen trenger ingen PLC,
+produksjonsconfig eller appstart. `go test ./...` inkluderer også denne testen.
+Den separate `TestInputsIntegration` krever eksplisitt opt-in og er ikke del av
+lokal PLC-verifikasjon. Ikke aktiver den uten separat autorisert PLC-test.
+
+SDK-en gjør også et best-effort UDP Identify-oppslag mot routerport 48899 ved
+Connect for å kontrollere target NetID. Dette er identifikasjon, ikke
+ruteendring; ingen route registration er tillatt. Lokal falsk ADS-server
+dekker TCP ADS-tjenestene; Identify får connection refused på loopback i
+nettverksløs container og er ikke attestert som vellykket routeroppslag.
+
+Standalone ADS metadata/snapshot diagnostics and offline comparison against an
+independent XAE/OPC UA capture are documented in
+[ADS input diagnostics](docs/ads-input-diagnostics.md). Build
+`./cmd/ads-diagnostic` separately; live reads require `--live` and explicit known
+network configuration. This command does not start the application control engine.

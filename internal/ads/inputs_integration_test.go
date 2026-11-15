@@ -11,7 +11,9 @@ import (
 )
 
 // TestInputsIntegration is deliberately opt-in because it opens a read-only
-// ADS connection to a PLC. It performs no route registration and no ADS write.
+// ADS connection to a PLC. It never changes routes or writes process data.
+// Symbol lookup uses administrative ReadWrite; Close releases handles with
+// administrative ADS Write (0xF006).
 func TestInputsIntegration(t *testing.T) {
 	if os.Getenv("GOTOV_ADS_INTEGRATION") != "1" {
 		t.Skip("set GOTOV_ADS_INTEGRATION=1 to run against a configured PLC")
@@ -36,6 +38,10 @@ func TestInputsIntegration(t *testing.T) {
 	require.NoError(t, client.Connect(ctx))
 	require.NoError(t, client.ReadState(ctx))
 	require.NoError(t, client.LookupInputs(ctx))
-	_, err = client.ReadInputsSnapshot(ctx)
+	t.Logf("ADS symbol metadata: %+v", client.InputsMetadata())
+	samples, err := CollectDiagnostic(ctx, client, 3, time.Second)
 	require.NoError(t, err)
+	for _, sample := range samples {
+		t.Logf("Validated ADS sample: %+v", sample)
+	}
 }
