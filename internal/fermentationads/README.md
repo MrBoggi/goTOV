@@ -104,3 +104,12 @@ reserved, failed connect, ambiguous commit or timeout leaves UA fenced and
 requires independent reconciliation. A successful pre-ADS abort restores the
 existing UA path only; it is not evidence that any physical output is SAFE.
 The unresolved handover blocker above remains for failures after reservation.
+
+The read-only `/api/fermentation/control-status` endpoint reports the current
+backend wiring as UA default, dedicated supervisor not started, unknown PLC
+owner/watchdog and ADS selection unavailable. It does not observe this draft
+supervisor or claim physical SAFE. Its response follows the proposed
+`goTOV-Interfaces/api/fermentation-control-status/v1` contract and must be
+reviewed and merged after that contract. A future activation implementation
+must revise the contract and status wiring together; it must never retain this
+static status when a supervisor is actually started.
