@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/siyka-au/go-ads/v3/ams"
 )
@@ -64,5 +65,38 @@ func TestCommandStagesAndCommitStopsOnFailure(t *testing.T) {
 	tr := Transport{client: f, command: 11, commit: 12}
 	if tr.WriteCommand(context.Background(), Command{}) == nil || len(f.calls) != 0 {
 		t.Fatal("invalid command wrote to transport")
+	}
+}
+
+type delayedWire struct{ calls, blockAt int }
+
+func (f *delayedWire) Read(context.Context, ams.Group, uint32, uint32) ([]byte, error) {
+	return nil, errors.New("unexpected read")
+}
+func (f *delayedWire) Write(ctx context.Context, _ ams.Group, _ uint32, _ []byte) error {
+	f.calls++
+	if f.calls == f.blockAt {
+		<-ctx.Done()
+	}
+	return nil
+}
+func TestTimeoutPermanentlyFencesAndClosesTransport(t *testing.T) {
+	f := &delayedWire{blockAt: 3}
+	closed := 0
+	tr := Transport{client: f, command: 11, commit: 12, closeSession: func() error { closed++; return nil }}
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Millisecond)
+	defer cancel()
+	c := Command{Session: 1, Sequence: 1, Owner: ADS}
+	if err := tr.WriteCommand(ctx, c); err == nil {
+		t.Fatal("expected timeout")
+	}
+	if closed != 1 || f.calls != 3 {
+		t.Fatalf("close=%d calls=%d", closed, f.calls)
+	}
+	if err := tr.WriteCommand(context.Background(), c); err == nil {
+		t.Fatal("fenced transport accepted new command")
+	}
+	if closed != 1 || f.calls != 3 {
+		t.Fatal("fenced transport called SDK again")
 	}
 }

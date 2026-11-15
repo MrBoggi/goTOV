@@ -31,3 +31,14 @@ exclusive UA/ADS ownership arbiter covering all writers and delayed callbacks,
 explicit deactivation and UA handover, input scaling and engine integration,
 backend/API/UI status and activation, restart/timeout/interlock simulated and
 native tests, and independent review. No process activation is configured.
+
+The coordinator closes its link on every exit. A transport operation error,
+invalid snapshot or expired context permanently fences the transport and closes
+the underlying session; a new session and explicit activation are required.
+SDK v3.0.1 `Session.Close` attempts administrative handle release before socket
+closure, and a frame already handed to the SDK or network cannot be recalled.
+The fence prevents further calls through this transport; it does not prove that
+an in-flight commit was not delivered or that the PLC reached SAFE. UA writers
+must remain fenced until SAFE is independently confirmed and an approved
+handover occurs. Closing may take time; it is not a safety timer or substitute
+for the PLC watchdog.

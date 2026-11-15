@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"time"
 )
@@ -11,6 +12,7 @@ import (
 // Link is the complete-image ADS transport. A single owner must serialize all
 // access; in particular the legacy UA writer must be disabled before Run starts.
 type Link interface {
+	Close() error
 	WriteCommand(context.Context, Command) error
 	ReadStatus(context.Context) (Status, error)
 	ReadApplied(context.Context) (Applied, error)
@@ -39,10 +41,11 @@ type Decision struct {
 // desired must supply newly computed decisions before maxDecisionAge expires,
 // including repeated unchanged values. The first fresh decision is required
 // before the disabled handover; stale, future or out-of-order decisions fail closed.
-func Run(ctx context.Context, link Link, desired <-chan Decision, observe chan<- Observation, maxDecisionAge time.Duration) error {
+func Run(ctx context.Context, link Link, desired <-chan Decision, observe chan<- Observation, maxDecisionAge time.Duration) (result error) {
 	if link == nil || desired == nil || maxDecisionAge <= 0 {
 		return fmt.Errorf("link, desired channel and positive decision age are required")
 	}
+	defer func() { result = errors.Join(result, link.Close()) }()
 	firstWait := time.NewTimer(maxDecisionAge)
 	defer firstWait.Stop()
 	var first Decision
@@ -152,6 +155,9 @@ func Run(ctx context.Context, link Link, desired <-chan Decision, observe chan<-
 		case <-expiry.C:
 			return fmt.Errorf("control decision expired")
 		case next, ok := <-desired:
+			if err := checkPreviousDecisionDeadline(time.Now(), decisionDeadline); err != nil {
+				return err
+			}
 			if !ok {
 				return fmt.Errorf("desired channel closed")
 			}
@@ -188,4 +194,13 @@ func Run(ctx context.Context, link Link, desired <-chan Decision, observe chan<-
 			}
 		}
 	}
+}
+
+// A late renewal cannot revive an expired decision even if both select cases
+// are ready; select is allowed to choose the channel rather than the timer.
+func checkPreviousDecisionDeadline(now, deadline time.Time) error {
+	if !now.Before(deadline) {
+		return fmt.Errorf("control decision expired before renewal")
+	}
+	return nil
 }

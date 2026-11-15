@@ -24,6 +24,7 @@ func (f *fakeLink) WriteCommand(_ context.Context, c Command) error {
 	}
 	return nil
 }
+func (f *fakeLink) Close() error { return nil }
 func (f *fakeLink) current() Command {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -232,5 +233,18 @@ func TestUnchangedFreshDecisionsRenew(t *testing.T) {
 	cancel()
 	if err := <-done; !errors.Is(err, context.Canceled) {
 		t.Fatalf("fresh producer failed: %v", err)
+	}
+}
+
+func TestLateRenewalCannotReviveExpiredDecision(t *testing.T) {
+	now := time.Now()
+	if checkPreviousDecisionDeadline(now, now) == nil {
+		t.Fatal("deadline at now must fail")
+	}
+	if checkPreviousDecisionDeadline(now, now.Add(-time.Nanosecond)) == nil {
+		t.Fatal("expired deadline must fail")
+	}
+	if err := checkPreviousDecisionDeadline(now, now.Add(time.Nanosecond)); err != nil {
+		t.Fatal(err)
 	}
 }
