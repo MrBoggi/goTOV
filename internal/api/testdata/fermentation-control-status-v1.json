@@ -1,0 +1,18 @@
+{
+  "contract": "fermentation-control-status-v1",
+  "vectors": [
+    {
+      "name": "ua-default-ownership-unverified",
+      "response": {
+        "contract_version": 1,
+        "configured_control_path": "ua",
+        "ads_supervisor": "not_started",
+        "reported_owner": null,
+        "watchdog_healthy": null,
+        "state": "degraded",
+        "reason": "ownership_unverified",
+        "ads_selection_available": false
+      }
+    }
+  ]
+}

@@ -116,6 +116,7 @@ func (s *Server) Router() http.Handler {
 	r.Post("/api/fermentation/active/{id}/manual", s.handleSetManualControl)
 	r.Put("/api/fermentation/active/{id}/step", s.handleUpdateActiveFermentationStep)
 	r.Get("/api/fermentation/status", s.handleGetFermentationStatus)
+	r.Get("/api/fermentation/control-status", s.handleFermentationControlStatus)
 	r.Get("/api/fermentation/history/{id}", s.handleGetFermentationHistory)
 	r.Get("/api/fermentation/docs", s.handleGetApiDocs)
 	r.Delete("/api/fermentation/plan/{id}", s.handleDeleteFermentationPlan)
