@@ -13,7 +13,15 @@ type fakeFence struct {
 	err     error
 }
 
-func (f *fakeFence) FenceWrites() error { close(f.started); <-f.release; return f.err }
+func (f *fakeFence) FenceWrites(ctx context.Context) error {
+	close(f.started)
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-f.release:
+		return f.err
+	}
+}
 func TestSupervisorWaitsForUAFenceBeforeAnyADSCommand(t *testing.T) {
 	fence := &fakeFence{started: make(chan struct{}), release: make(chan struct{})}
 	link := &fakeLink{}
@@ -51,5 +59,20 @@ func TestSupervisorRejectsUncertainUAWrites(t *testing.T) {
 	}
 	if len(link.commands) != 0 {
 		t.Fatal("ADS command despite fence failure")
+	}
+}
+
+func TestSupervisorDoesNotWriteADSIfUAFenceTimesOut(t *testing.T) {
+	fence := &fakeFence{started: make(chan struct{}), release: make(chan struct{})}
+	link := &fakeLink{}
+	desired := make(chan Decision)
+	var s Supervisor
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Millisecond)
+	defer cancel()
+	if err := s.Run(ctx, fence, link, desired, nil, time.Second); !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("expected timeout: %v", err)
+	}
+	if len(link.commands) != 0 {
+		t.Fatal("ADS command despite unresolved UA write")
 	}
 }

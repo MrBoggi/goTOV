@@ -29,7 +29,7 @@ func (c *Client) WriteNodeValue(ctx context.Context, nodeID string, value interf
 		}},
 	}
 
-	err = c.writeGate.write(func() error {
+	err = c.writeGate.write(id.String(), func() error {
 		resp, err := c.conn.Write(ctx, req)
 		if err != nil {
 			return fmt.Errorf("write failed: %w", err)

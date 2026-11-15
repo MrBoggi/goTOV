@@ -10,7 +10,7 @@ import (
 
 // UAFence must fence the exact UA client used by every in-process write path.
 // It must wait for all in-flight writes and fail if their outcomes are unknown.
-type UAFence interface{ FenceWrites() error }
+type UAFence interface{ FenceWrites(context.Context) error }
 
 // Supervisor is a one-shot handover guard. It does not release the UA fence
 // on success, failure or cancellation, and cannot establish cross-process or
@@ -32,7 +32,9 @@ func (s *Supervisor) Run(ctx context.Context, ua UAFence, link Link, desired <-c
 	}
 	s.started = true
 	s.mu.Unlock()
-	if err := ua.FenceWrites(); err != nil {
+	fenceCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	if err := ua.FenceWrites(fenceCtx); err != nil {
 		return errors.Join(fmt.Errorf("fence UA writes: %w", err), link.Close())
 	}
 	return Run(ctx, link, desired, observations, maxDecisionAge)

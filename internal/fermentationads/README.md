@@ -43,10 +43,14 @@ must remain fenced until SAFE is independently confirmed and an approved
 handover occurs. Closing may take time; it is not a safety timer or substitute
 for the PLC watchdog.
 
-`opcua.Client.FenceWrites` now gates all writes through that client, including
-arbitrary API node writes and delayed fermentation callbacks; it waits for
-in-flight calls and refuses the handover if any prior UA write returned an
-uncertain result. `Supervisor` invokes this one-way fence before ADS commands
+`opcua.Client.FenceWrites` fences the five fermentation outputs and all
+unclassified UA nodes through that client, including generic API writes and
+delayed fermentation callbacks. It permits only the explicitly listed 14
+non-fermentation outputs from the checked-in PLC source while fenced. Unknown
+identities and aliases are denied. It waits within the caller’s context for
+in-flight potentially relevant calls and refuses handover if an outcome is
+uncertain. The list and its physical independence must be checked on the actual
+PLC target before use; unclassified writes remain unavailable while fenced. `Supervisor` invokes this one-way fence before ADS commands
 and does not release it on error. These primitives are not connected to app
 startup or exposed as an activation endpoint. They do not fence another process,
 another UA client or an already transmitted frame. A process restart resets the
