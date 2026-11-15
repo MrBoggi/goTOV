@@ -12,12 +12,14 @@ import (
 )
 
 // Client is a read-only client for the V1 GVL_ADS.stInputs contract.
-// It has no methods that write to the PLC.
+// It never writes process data or outputs. The SDK uses administrative symbol
+// ReadWrite calls and releases acquired handles with ADS Write (0xF006) on Close.
 type Client struct {
 	session *adsclient.Session
 
-	inputsHandle uint32
-	pollInterval time.Duration
+	inputsMetadata SymbolMetadata
+	inputsHandle   uint32
+	pollInterval   time.Duration
 }
 
 // NewClient validates the ADS configuration and creates a session without
@@ -92,6 +94,7 @@ func (c *Client) LookupInputs(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("lookup ADS symbol %q: %w", InputsSymbol, err)
 	}
+	c.inputsMetadata = SymbolMetadata{Name: InputsSymbol, DataType: symbol.DataType, Size: symbol.Length}
 	if symbol.Length != InputsSize {
 		return fmt.Errorf("ADS symbol %q size = %d, want %d", InputsSymbol, symbol.Length, InputsSize)
 	}
@@ -130,3 +133,7 @@ func (c *Client) ReadInputsSnapshot(ctx context.Context) (Inputs, error) {
 	}
 	return decodeStableInputs(before, snapshot, after)
 }
+
+// InputsMetadata returns the last symbol-service metadata, including a rejected size.
+// It does not expose or use PLC memory offsets.
+func (c *Client) InputsMetadata() SymbolMetadata { return c.inputsMetadata }

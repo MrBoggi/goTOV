@@ -1,0 +1,97 @@
+{
+  "Source": "ads",
+  "ReferenceEvidence": "",
+  "Target": "synthetic-fixture:851",
+  "Symbol": {
+    "Name": "GVL_ADS.stInputs",
+    "DataType": "ST_BreweryInputs",
+    "Size": 52
+  },
+  "Samples": [
+    {
+      "StartedAt": "2026-11-15T10:00:00Z",
+      "FinishedAt": "2026-11-15T10:00:00.001Z",
+      "Inputs": {
+        "Version": 1,
+        "StructureSize": 52,
+        "Sequence": 2,
+        "HltTemp": 1,
+        "MltTemp": -2,
+        "BkTemp": 3,
+        "HeatExchWortTemp": -4,
+        "HeatExchWaterTemp": 5,
+        "PhValue": -6,
+        "SupplyWaterTemp": 7,
+        "ReturnWaterTemp": -8,
+        "SpecificGravity": 9,
+        "Fermenter1Temp": -10,
+        "Fermenter2Temp": 11,
+        "GlycolChillerTemp": -12,
+        "FlowHLT": 1.0,
+        "FlowMLT": -2.5,
+        "FlowWort": 3.25,
+        "MltRecircTemp": -4.5,
+        "FlowHLTOutOfRange": true,
+        "FlowMLTOutOfRange": false,
+        "MltRecircTempOutOfRange": true
+      }
+    },
+    {
+      "StartedAt": "2026-11-15T10:00:01Z",
+      "FinishedAt": "2026-11-15T10:00:01.001Z",
+      "Inputs": {
+        "Version": 1,
+        "StructureSize": 52,
+        "Sequence": 4,
+        "HltTemp": 1,
+        "MltTemp": -2,
+        "BkTemp": 3,
+        "HeatExchWortTemp": -4,
+        "HeatExchWaterTemp": 5,
+        "PhValue": -6,
+        "SupplyWaterTemp": 7,
+        "ReturnWaterTemp": -8,
+        "SpecificGravity": 9,
+        "Fermenter1Temp": -10,
+        "Fermenter2Temp": 11,
+        "GlycolChillerTemp": -12,
+        "FlowHLT": 1.0,
+        "FlowMLT": -2.5,
+        "FlowWort": 3.25,
+        "MltRecircTemp": -4.5,
+        "FlowHLTOutOfRange": true,
+        "FlowMLTOutOfRange": false,
+        "MltRecircTempOutOfRange": true
+      }
+    },
+    {
+      "StartedAt": "2026-11-15T10:00:02Z",
+      "FinishedAt": "2026-11-15T10:00:02.001Z",
+      "Inputs": {
+        "Version": 1,
+        "StructureSize": 52,
+        "Sequence": 6,
+        "HltTemp": 1,
+        "MltTemp": -2,
+        "BkTemp": 3,
+        "HeatExchWortTemp": -4,
+        "HeatExchWaterTemp": 5,
+        "PhValue": -6,
+        "SupplyWaterTemp": 7,
+        "ReturnWaterTemp": -8,
+        "SpecificGravity": 9,
+        "Fermenter1Temp": -10,
+        "Fermenter2Temp": 11,
+        "GlycolChillerTemp": -12,
+        "FlowHLT": 1.0,
+        "FlowMLT": -2.5,
+        "FlowWort": 3.25,
+        "MltRecircTemp": -4.5,
+        "FlowHLTOutOfRange": true,
+        "FlowMLTOutOfRange": false,
+        "MltRecircTempOutOfRange": true
+      }
+    }
+  ],
+  "Error": ""
+}
