@@ -19,14 +19,17 @@ var independentBreweryOutputs = map[string]struct{}{
 	"ns=4;s=MAIN.fbUA.bkHeaterPower": {}, "ns=4;s=MAIN.fbUA.hxValvePosition": {},
 }
 
-// The zero value allows all UA writes. Fence is one-way, including after a
-// timeout. A risky write error makes the outcome uncertain and blocks handover.
+// The zero value allows all UA writes. A risky write error makes the outcome
+// uncertain and blocks both ADS handover and automatic fence rollback.
 type writeGate struct {
-	mu        sync.Mutex
-	fencing   bool
-	uncertain bool
-	active    int
-	drained   chan struct{}
+	mu         sync.Mutex
+	fencing    bool
+	uncertain  bool
+	active     int
+	drained    chan struct{}
+	generation uint64
+	token      uint64
+	adsStarted bool
 }
 
 func (g *writeGate) write(node string, fn func() error) error {
@@ -55,18 +58,45 @@ func (g *writeGate) write(node string, fn func() error) error {
 	}
 	return err
 }
-func (g *writeGate) fence(ctx context.Context) error {
+
+// begin claims a unique handover transaction before waiting. Even if waiting
+// times out the returned token owns the fence, until a safe abort or ADS start.
+func (g *writeGate) begin(ctx context.Context) (uint64, error) {
 	if err := ctx.Err(); err != nil {
-		return err
+		return 0, err
 	}
 	g.mu.Lock()
+	if g.fencing {
+		g.mu.Unlock()
+		return 0, fmt.Errorf("UA handover already reserved")
+	}
+	if g.generation == ^uint64(0) {
+		g.mu.Unlock()
+		return 0, fmt.Errorf("UA handover generation exhausted")
+	}
+	g.generation++
+	token := g.generation
+	g.token = token
 	g.fencing = true
+	g.adsStarted = false
+	g.mu.Unlock()
+	return token, g.waitDrained(ctx, token)
+}
+func (g *writeGate) waitDrained(ctx context.Context, token uint64) error {
+	g.mu.Lock()
+	if !g.fencing || token == 0 || token != g.token {
+		g.mu.Unlock()
+		return fmt.Errorf("invalid UA handover token")
+	}
 	if g.active == 0 {
 		defer g.mu.Unlock()
-		if g.uncertain {
-			return fmt.Errorf("cannot fence UA safely: prior write outcome is uncertain")
+		if err := ctx.Err(); err != nil {
+			return err
 		}
-		return ctx.Err()
+		if g.uncertain {
+			return fmt.Errorf("UA write outcome unknown")
+		}
+		return nil
 	}
 	if g.drained == nil {
 		g.drained = make(chan struct{})
@@ -80,22 +110,63 @@ func (g *writeGate) fence(ctx context.Context) error {
 	}
 	g.mu.Lock()
 	defer g.mu.Unlock()
+	if !g.fencing || token != g.token {
+		return fmt.Errorf("UA handover no longer reserved")
+	}
 	if err := ctx.Err(); err != nil {
 		return err
 	}
 	if g.uncertain {
-		return fmt.Errorf("cannot fence UA safely: prior write outcome is uncertain")
+		return fmt.Errorf("UA write outcome unknown")
 	}
 	return nil
 }
 
-// FenceWrites blocks fermentation and unclassified writes immediately, then
-// waits for all possibly relevant in-flight writes within ctx. Cancellation
-// never releases the fence, and no error grants permission for ADS to start.
-// Other clients, independent output mapping and PLC SAFE remain external gates.
-func (c *Client) FenceWrites(ctx context.Context) error {
+// abort only succeeds before ADS start is reserved and after all relevant UA
+// writes returned known success. An error leaves the fence closed.
+func (g *writeGate) abort(ctx context.Context, token uint64) error {
+	if err := g.waitDrained(ctx, token); err != nil {
+		return err
+	}
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if !g.fencing || token != g.token || g.adsStarted || g.active != 0 || g.uncertain {
+		return fmt.Errorf("UA handover cannot be safely aborted")
+	}
+	g.fencing = false
+	g.token = 0
+	return nil
+}
+
+// markADSStarted irreversibly gives up the right to auto-abort before any ADS
+// call. A racing abort and mark cannot both succeed.
+func (g *writeGate) markADSStarted(token uint64) error {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	if !g.fencing || token == 0 || token != g.token || g.adsStarted || g.active != 0 || g.uncertain {
+		return fmt.Errorf("UA handover is not ready for ADS")
+	}
+	g.adsStarted = true
+	return nil
+}
+func (c *Client) BeginFence(ctx context.Context) (uint64, error) {
+	if c == nil {
+		return 0, fmt.Errorf("nil UA client")
+	}
+	return c.writeGate.begin(ctx)
+}
+func (c *Client) AbortFence(ctx context.Context, token uint64) error {
 	if c == nil {
 		return fmt.Errorf("nil UA client")
 	}
-	return c.writeGate.fence(ctx)
+	return c.writeGate.abort(ctx, token)
+}
+func (c *Client) MarkADSStarted(token uint64) error {
+	if c == nil {
+		return fmt.Errorf("nil UA client")
+	}
+	return c.writeGate.markADSStarted(token)
 }

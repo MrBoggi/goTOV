@@ -41,7 +41,7 @@ type Decision struct {
 // desired must supply newly computed decisions before maxDecisionAge expires,
 // including repeated unchanged values. The first fresh decision is required
 // before the disabled handover; stale, future or out-of-order decisions fail closed.
-func Run(ctx context.Context, link Link, desired <-chan Decision, observe chan<- Observation, maxDecisionAge time.Duration) (result error) {
+func run(ctx context.Context, link Link, desired <-chan Decision, observe chan<- Observation, maxDecisionAge time.Duration) (result error) {
 	if link == nil || desired == nil || maxDecisionAge <= 0 {
 		return fmt.Errorf("link, desired channel and positive decision age are required")
 	}

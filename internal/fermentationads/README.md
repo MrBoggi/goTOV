@@ -2,9 +2,8 @@
 
 This package is not wired into the application. It must not be enabled until an
 independent review, full integration and the commissioning gates in Interfaces
-#7 are complete. `Run` requires the caller to fence all UA writers before ADS
-handover and to keep them fenced through failure and safe handover. No arbiter
-currently enforces that requirement. An error or cancellation stops ADS writes;
+#7 are complete. The draft supervisor fences the configured UA client before ADS startup, but
+no app-integrated arbiter enforces exclusivity across all writers and restarts. An error or cancellation stops ADS writes;
 it does not command UA ownership or prove physical outputs are safe.
 
 The caller supplies a positive maximum decision age and must repeatedly publish
@@ -43,16 +42,20 @@ must remain fenced until SAFE is independently confirmed and an approved
 handover occurs. Closing may take time; it is not a safety timer or substitute
 for the PLC watchdog.
 
-`opcua.Client.FenceWrites` fences the five fermentation outputs and all
+`opcua.Client.BeginFence` fences the five fermentation outputs and all
 unclassified UA nodes through that client, including generic API writes and
 delayed fermentation callbacks. It permits only the explicitly listed 14
 non-fermentation outputs from the checked-in PLC source while fenced. Unknown
 identities and aliases are denied. It waits within the caller’s context for
 in-flight potentially relevant calls and refuses handover if an outcome is
 uncertain. The list and its physical independence must be checked on the actual
-PLC target before use; unclassified writes remain unavailable while fenced. `Supervisor` invokes this one-way fence before ADS commands
-and does not release it on error. These primitives are not connected to app
-startup or exposed as an activation endpoint. They do not fence another process,
+PLC target before use; unclassified writes remain unavailable while fenced.
+`Supervisor` claims a token before opening any ADS session. On a pre-ADS
+failure it gives up ADS start and can release the fence only if relevant UA
+writes have drained with known successful outcomes. It reports UNKNOWN and
+keeps the fence if those conditions cannot be established. Once ADS start has
+been reserved it never automatically releases the fence. These primitives are
+not connected to app startup or exposed as an activation endpoint. They do not fence another process,
 another UA client or an already transmitted frame. A process restart resets the
 in-memory fence, so startup ownership reconciliation and independently verified
 SAFE handover are mandatory before wiring this into production.
@@ -86,3 +89,18 @@ required by commissioning; the applied image is not physical feedback. The
 current contract and available runtime evidence do not establish that recovery
 protocol. Do not auto-release the fence, infer physical SAFE from a timeout, or
 turn this draft into a production activation path.
+
+## Pre-ADS abort transaction
+
+A timed-out fence may be aborted only with its matching transaction token,
+before ADS startup is irrevocably reserved, after all relevant in-flight UA
+writes return successfully. Abort and ADS reservation share a lock so they
+cannot both win; a stale token cannot alter a later fence. Supervisor must own
+ADS access exclusively, and its link factory must create a fresh session only
+when invoked after reservation. Other ADS clients, a previously active session,
+a factory with earlier side effects, or frames outside this control invalidate
+that assumption. The primitive cannot prove their absence. Once ADS startup is
+reserved, failed connect, ambiguous commit or timeout leaves UA fenced and
+requires independent reconciliation. A successful pre-ADS abort restores the
+existing UA path only; it is not evidence that any physical output is SAFE.
+The unresolved handover blocker above remains for failures after reservation.
