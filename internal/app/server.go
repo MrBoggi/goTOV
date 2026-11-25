@@ -12,6 +12,7 @@ import (
 	"github.com/MrBoggi/goTOV/internal/ads"
 	"github.com/MrBoggi/goTOV/internal/api"
 	"github.com/MrBoggi/goTOV/internal/config"
+	"github.com/MrBoggi/goTOV/internal/controlpath"
 	"github.com/MrBoggi/goTOV/internal/fermentation"
 	"github.com/MrBoggi/goTOV/internal/opcua"
 	"github.com/MrBoggi/goTOV/internal/version"
@@ -120,6 +121,12 @@ func RunServer(log zerolog.Logger) error {
 	// --- Start HTTP/WS API server ---
 	apiServer := api.NewServer(log, client, fermentationStore)
 	apiServer.SetADSMonitor(adsMonitor)
+	controlStore, controlErr := controlpath.New(ctx, fermentationStore.DB.DB)
+	if controlErr != nil {
+		log.Error().Err(controlErr).Msg("fermentation control-path persistence unavailable")
+	} else {
+		apiServer.SetControlPathStore(controlStore)
+	}
 	apiServer.FermentationEngine().Start()
 	defer apiServer.FermentationEngine().Stop()
 	wg.Add(1)

@@ -1,0 +1,647 @@
+{
+  "version": 1,
+  "note": "Synthetic contract examples; never PLC evidence.",
+  "snapshots": [
+    {
+      "name": "connected_offer_unknown_owner",
+      "response": {
+        "contract_version": 1,
+        "revision": "r1",
+        "requested_path": "ua",
+        "confirmed_path": null,
+        "reported_owner": null,
+        "watchdog_healthy": null,
+        "observed_at": null,
+        "observation_fresh": false,
+        "connections": {
+          "ua": "connected",
+          "ads": "connected"
+        },
+        "available_paths": [
+          "ua",
+          "ads"
+        ],
+        "transition": null,
+        "alert": null
+      }
+    },
+    {
+      "name": "disconnected_ads",
+      "response": {
+        "contract_version": 1,
+        "revision": "r1",
+        "requested_path": "ua",
+        "confirmed_path": null,
+        "reported_owner": null,
+        "watchdog_healthy": null,
+        "observed_at": null,
+        "observation_fresh": false,
+        "connections": {
+          "ua": "connected",
+          "ads": "disconnected"
+        },
+        "available_paths": [
+          "ua"
+        ],
+        "transition": null,
+        "alert": null
+      }
+    },
+    {
+      "name": "confirmed_ads",
+      "response": {
+        "contract_version": 1,
+        "revision": "r1",
+        "requested_path": "ads",
+        "confirmed_path": "ads",
+        "reported_owner": "ads",
+        "watchdog_healthy": true,
+        "observed_at": "2026-11-25T12:00:00Z",
+        "observation_fresh": true,
+        "connections": {
+          "ua": "connected",
+          "ads": "connected"
+        },
+        "available_paths": [
+          "ua",
+          "ads"
+        ],
+        "transition": {
+          "operation_id": "b037789b-ff3e-48d3-87ea-bbe3c19f8069",
+          "target_path": "ads",
+          "state": "confirmed",
+          "reason": null
+        },
+        "alert": null
+      }
+    },
+    {
+      "name": "uncertain",
+      "response": {
+        "contract_version": 1,
+        "revision": "r1",
+        "requested_path": "ads",
+        "confirmed_path": null,
+        "reported_owner": null,
+        "watchdog_healthy": null,
+        "observed_at": null,
+        "observation_fresh": false,
+        "connections": {
+          "ua": "connected",
+          "ads": "connected"
+        },
+        "available_paths": [
+          "ua",
+          "ads"
+        ],
+        "transition": {
+          "operation_id": "b037789b-ff3e-48d3-87ea-bbe3c19f8069",
+          "target_path": "ads",
+          "state": "unknown",
+          "reason": "confirmation_timeout"
+        },
+        "alert": {
+          "severity": "high",
+          "code": "transition_uncertain"
+        }
+      }
+    },
+    {
+      "name": "failed",
+      "response": {
+        "contract_version": 1,
+        "revision": "r1",
+        "requested_path": "ads",
+        "confirmed_path": null,
+        "reported_owner": null,
+        "watchdog_healthy": null,
+        "observed_at": null,
+        "observation_fresh": false,
+        "connections": {
+          "ua": "connected",
+          "ads": "connected"
+        },
+        "available_paths": [
+          "ua",
+          "ads"
+        ],
+        "transition": {
+          "operation_id": "b037789b-ff3e-48d3-87ea-bbe3c19f8069",
+          "target_path": "ads",
+          "state": "failed",
+          "reason": "transport_error"
+        },
+        "alert": {
+          "severity": "high",
+          "code": "transition_failed"
+        }
+      }
+    },
+    {
+      "name": "watchdog_unhealthy",
+      "response": {
+        "contract_version": 1,
+        "revision": "r1",
+        "requested_path": "ads",
+        "confirmed_path": null,
+        "reported_owner": "ads",
+        "watchdog_healthy": false,
+        "observed_at": "2026-11-25T12:00:00Z",
+        "observation_fresh": true,
+        "connections": {
+          "ua": "connected",
+          "ads": "connected"
+        },
+        "available_paths": [
+          "ua",
+          "ads"
+        ],
+        "transition": {
+          "operation_id": "b037789b-ff3e-48d3-87ea-bbe3c19f8069",
+          "target_path": "ads",
+          "state": "failed",
+          "reason": "watchdog_unhealthy"
+        },
+        "alert": {
+          "severity": "high",
+          "code": "watchdog_unhealthy"
+        }
+      }
+    }
+  ],
+  "requests": [
+    {
+      "name": "accepted_unknown_owner_but_connection_active",
+      "request": {
+        "contract_version": 1,
+        "request_id": "b037789b-ff3e-48d3-87ea-bbe3c19f8069",
+        "expected_revision": "r1",
+        "target_path": "ads",
+        "confirmed": true
+      },
+      "context": {
+        "revision": "r1",
+        "target_connection": "connected",
+        "owner": null,
+        "watchdog": null,
+        "observation_fresh": false,
+        "prerequisites": "unavailable",
+        "in_flight": false
+      },
+      "http_status": 202,
+      "result": {
+        "operation_id": "b037789b-ff3e-48d3-87ea-bbe3c19f8069",
+        "state": "pending"
+      },
+      "handover_side_effects": 0,
+      "after": {
+        "requested_path": "ads",
+        "transition": "unknown",
+        "severity": "high",
+        "plc_writes": 0,
+        "automatic_resume": false
+      }
+    },
+    {
+      "name": "disconnected",
+      "request": {
+        "contract_version": 1,
+        "request_id": "b037789b-ff3e-48d3-87ea-bbe3c19f8069",
+        "expected_revision": "r1",
+        "target_path": "ads",
+        "confirmed": true
+      },
+      "context": {
+        "revision": "r1",
+        "target_connection": "disconnected",
+        "prerequisites": "met",
+        "in_flight": false
+      },
+      "http_status": 409,
+      "result": {
+        "contract_version": 1,
+        "error": "path_unavailable"
+      },
+      "handover_side_effects": 0
+    },
+    {
+      "name": "unknown_connection",
+      "request": {
+        "contract_version": 1,
+        "request_id": "b037789b-ff3e-48d3-87ea-bbe3c19f8069",
+        "expected_revision": "r1",
+        "target_path": "ads",
+        "confirmed": true
+      },
+      "context": {
+        "revision": "r1",
+        "target_connection": "unknown",
+        "prerequisites": "met",
+        "in_flight": false
+      },
+      "http_status": 409,
+      "result": {
+        "contract_version": 1,
+        "error": "path_unavailable"
+      },
+      "handover_side_effects": 0
+    },
+    {
+      "name": "stale_revision",
+      "request": {
+        "contract_version": 1,
+        "request_id": "b037789b-ff3e-48d3-87ea-bbe3c19f8069",
+        "expected_revision": "r1",
+        "target_path": "ads",
+        "confirmed": true
+      },
+      "context": {
+        "revision": "r2",
+        "target_connection": "connected",
+        "prerequisites": "met",
+        "in_flight": false
+      },
+      "http_status": 409,
+      "result": {
+        "contract_version": 1,
+        "error": "revision_conflict"
+      },
+      "handover_side_effects": 0
+    },
+    {
+      "name": "missing_confirmation",
+      "request": {
+        "contract_version": 1,
+        "request_id": "b037789b-ff3e-48d3-87ea-bbe3c19f8069",
+        "expected_revision": "r1",
+        "target_path": "ads",
+        "confirmed": false
+      },
+      "context": {
+        "revision": "r1",
+        "target_connection": "connected",
+        "prerequisites": "met",
+        "in_flight": false
+      },
+      "http_status": 400,
+      "result": {
+        "contract_version": 1,
+        "error": "invalid_request"
+      },
+      "handover_side_effects": 0
+    },
+    {
+      "name": "handover_not_implemented",
+      "request": {
+        "contract_version": 1,
+        "request_id": "b037789b-ff3e-48d3-87ea-bbe3c19f8069",
+        "expected_revision": "r1",
+        "target_path": "ads",
+        "confirmed": true
+      },
+      "context": {
+        "revision": "r1",
+        "target_connection": "connected",
+        "prerequisites": "unavailable",
+        "in_flight": false
+      },
+      "http_status": 202,
+      "result": {
+        "operation_id": "b037789b-ff3e-48d3-87ea-bbe3c19f8069",
+        "state": "pending"
+      },
+      "handover_side_effects": 0,
+      "after": {
+        "requested_path": "ads",
+        "transition": "unknown",
+        "severity": "high",
+        "plc_writes": 0,
+        "automatic_resume": false
+      }
+    },
+    {
+      "name": "already_in_flight",
+      "request": {
+        "contract_version": 1,
+        "request_id": "b037789b-ff3e-48d3-87ea-bbe3c19f8069",
+        "expected_revision": "r1",
+        "target_path": "ads",
+        "confirmed": true
+      },
+      "context": {
+        "revision": "r1",
+        "target_connection": "connected",
+        "prerequisites": "met",
+        "in_flight": true
+      },
+      "http_status": 409,
+      "result": {
+        "contract_version": 1,
+        "error": "transition_in_progress"
+      },
+      "handover_side_effects": 0
+    },
+    {
+      "name": "persistence_failure",
+      "request": {
+        "contract_version": 1,
+        "request_id": "b037789b-ff3e-48d3-87ea-bbe3c19f8069",
+        "expected_revision": "r1",
+        "target_path": "ads",
+        "confirmed": true
+      },
+      "context": {
+        "revision": "r1",
+        "target_connection": "connected",
+        "prerequisites": "met",
+        "in_flight": false,
+        "persistence": "failed"
+      },
+      "http_status": 503,
+      "result": {
+        "contract_version": 1,
+        "error": "persistence_unavailable"
+      },
+      "handover_side_effects": 0
+    },
+    {
+      "name": "exact_replay_lost_response",
+      "request": {
+        "contract_version": 1,
+        "request_id": "b037789b-ff3e-48d3-87ea-bbe3c19f8069",
+        "expected_revision": "r1",
+        "target_path": "ads",
+        "confirmed": true
+      },
+      "context": {
+        "revision": "r2",
+        "target_connection": "disconnected",
+        "record": "same_request_pending"
+      },
+      "http_status": 202,
+      "result": {
+        "operation_id": "b037789b-ff3e-48d3-87ea-bbe3c19f8069",
+        "state": "pending"
+      },
+      "handover_side_effects": 0
+    },
+    {
+      "name": "key_reused_with_different_payload",
+      "request": {
+        "contract_version": 1,
+        "request_id": "b037789b-ff3e-48d3-87ea-bbe3c19f8069",
+        "expected_revision": "r1",
+        "target_path": "ua",
+        "confirmed": true
+      },
+      "context": {
+        "revision": "r2",
+        "record": "different_payload"
+      },
+      "http_status": 409,
+      "result": {
+        "contract_version": 1,
+        "error": "idempotency_conflict"
+      },
+      "handover_side_effects": 0
+    },
+    {
+      "name": "known_evidence_permits_attempt",
+      "request": {
+        "contract_version": 1,
+        "request_id": "b037789b-ff3e-48d3-87ea-bbe3c19f8069",
+        "expected_revision": "r1",
+        "target_path": "ads",
+        "confirmed": true
+      },
+      "context": {
+        "revision": "r1",
+        "target_connection": "connected",
+        "owner": "ua",
+        "watchdog": true,
+        "observation_fresh": true,
+        "prerequisites": "met",
+        "in_flight": false,
+        "commissioning_authorized": true
+      },
+      "http_status": 202,
+      "result": {
+        "operation_id": "b037789b-ff3e-48d3-87ea-bbe3c19f8069",
+        "state": "pending"
+      },
+      "handover_side_effects": 1
+    },
+    {
+      "name": "unknown_owner",
+      "request": {
+        "contract_version": 1,
+        "request_id": "b037789b-ff3e-48d3-87ea-bbe3c19f8069",
+        "expected_revision": "r1",
+        "target_path": "ads",
+        "confirmed": true
+      },
+      "context": {
+        "revision": "r1",
+        "target_connection": "connected",
+        "owner": null,
+        "watchdog": true,
+        "observation_fresh": true,
+        "prerequisites": "unavailable",
+        "in_flight": false
+      },
+      "http_status": 202,
+      "result": {
+        "operation_id": "b037789b-ff3e-48d3-87ea-bbe3c19f8069",
+        "state": "pending"
+      },
+      "handover_side_effects": 0,
+      "after": {
+        "requested_path": "ads",
+        "transition": "unknown",
+        "severity": "high",
+        "plc_writes": 0,
+        "automatic_resume": false
+      }
+    },
+    {
+      "name": "unknown_watchdog",
+      "request": {
+        "contract_version": 1,
+        "request_id": "b037789b-ff3e-48d3-87ea-bbe3c19f8069",
+        "expected_revision": "r1",
+        "target_path": "ads",
+        "confirmed": true
+      },
+      "context": {
+        "revision": "r1",
+        "target_connection": "connected",
+        "owner": "ua",
+        "watchdog": null,
+        "observation_fresh": true,
+        "prerequisites": "unavailable",
+        "in_flight": false
+      },
+      "http_status": 202,
+      "result": {
+        "operation_id": "b037789b-ff3e-48d3-87ea-bbe3c19f8069",
+        "state": "pending"
+      },
+      "handover_side_effects": 0,
+      "after": {
+        "requested_path": "ads",
+        "transition": "unknown",
+        "severity": "high",
+        "plc_writes": 0,
+        "automatic_resume": false
+      }
+    },
+    {
+      "name": "stale_owner_watchdog",
+      "request": {
+        "contract_version": 1,
+        "request_id": "b037789b-ff3e-48d3-87ea-bbe3c19f8069",
+        "expected_revision": "r1",
+        "target_path": "ads",
+        "confirmed": true
+      },
+      "context": {
+        "revision": "r1",
+        "target_connection": "connected",
+        "owner": "ua",
+        "watchdog": true,
+        "observation_fresh": false,
+        "prerequisites": "unavailable",
+        "in_flight": false
+      },
+      "http_status": 202,
+      "result": {
+        "operation_id": "b037789b-ff3e-48d3-87ea-bbe3c19f8069",
+        "state": "pending"
+      },
+      "handover_side_effects": 0,
+      "after": {
+        "requested_path": "ads",
+        "transition": "unknown",
+        "severity": "high",
+        "plc_writes": 0,
+        "automatic_resume": false
+      }
+    },
+    {
+      "name": "unhealthy_watchdog",
+      "request": {
+        "contract_version": 1,
+        "request_id": "b037789b-ff3e-48d3-87ea-bbe3c19f8069",
+        "expected_revision": "r1",
+        "target_path": "ads",
+        "confirmed": true
+      },
+      "context": {
+        "revision": "r1",
+        "target_connection": "connected",
+        "owner": "ads",
+        "watchdog": false,
+        "observation_fresh": true,
+        "prerequisites": "unavailable",
+        "in_flight": false
+      },
+      "http_status": 202,
+      "result": {
+        "operation_id": "b037789b-ff3e-48d3-87ea-bbe3c19f8069",
+        "state": "pending"
+      },
+      "handover_side_effects": 0,
+      "after": {
+        "requested_path": "ads",
+        "transition": "unknown",
+        "severity": "high",
+        "plc_writes": 0,
+        "automatic_resume": false
+      }
+    }
+  ],
+  "lifecycle": [
+    {
+      "name": "restart_pending",
+      "before": {
+        "requested_path": "ads",
+        "transition": "pending"
+      },
+      "after": {
+        "requested_path": "ads",
+        "transition": "unknown",
+        "reported_owner": null,
+        "confirmed_path": null,
+        "watchdog_healthy": null,
+        "severity": "high",
+        "automatic_replay": false
+      }
+    },
+    {
+      "name": "http_accepted_is_not_confirmed",
+      "before": {
+        "requested_path": "ua",
+        "confirmed_path": "ua"
+      },
+      "after": {
+        "http_status": 202,
+        "requested_path": "ads",
+        "transition": "pending",
+        "claim_new_confirmed_path": false
+      }
+    },
+    {
+      "name": "stale_observation",
+      "before": {
+        "reported_owner": "ads",
+        "confirmed_path": "ads",
+        "watchdog_healthy": true
+      },
+      "after": {
+        "observation_fresh": false,
+        "reported_owner": null,
+        "confirmed_path": null,
+        "watchdog_healthy": null,
+        "automatic_fallback": false
+      }
+    },
+    {
+      "name": "failure_preserves_intent",
+      "before": {
+        "requested_path": "ads"
+      },
+      "after": {
+        "requested_path": "ads",
+        "transition": "failed",
+        "severity": "high",
+        "automatic_fallback": false
+      }
+    },
+    {
+      "name": "intent_only_then_reconciled",
+      "sequence": [
+        {
+          "event": "select_ads_with_connected_transport_unknown_owner",
+          "http_status": 202,
+          "requested_path": "ads",
+          "transition": "unknown",
+          "severity": "high",
+          "plc_writes": 0
+        },
+        {
+          "event": "owner_later_known",
+          "transition": "unknown",
+          "plc_writes": 0,
+          "automatic_resume": false
+        },
+        {
+          "event": "explicit_new_request_after_reconciliation",
+          "new_request_id": true,
+          "prior_command_resolved": true,
+          "prerequisites": "met",
+          "handover_may_start": true
+        }
+      ]
+    }
+  ]
+}
