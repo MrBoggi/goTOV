@@ -151,6 +151,23 @@ func (s *Store) Status(ctx context.Context, cn Connections) (Snapshot, error) {
 	}
 	return out, nil
 }
+
+// Replay is checked before any connection probe so a retry of a durably
+// accepted request does not depend on a live or responsive PLC transport.
+func (s *Store) Replay(ctx context.Context, r Request) (bool, error) {
+	var prev Request
+	err := s.db.QueryRowContext(ctx, `SELECT request_id,expected_revision,target_path,confirmed,contract_version FROM fermentation_control_requests WHERE request_id=?`, r.ID).Scan(&prev.ID, &prev.Revision, &prev.Target, &prev.Confirmed, &prev.Version)
+	if errors.Is(err, sql.ErrNoRows) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	if prev != r {
+		return false, ErrConflict
+	}
+	return true, nil
+}
 func (s *Store) Accept(ctx context.Context, r Request, cn Connections) error {
 	id, err := uuid.Parse(r.ID)
 	if err != nil || id.String() != r.ID || r.Version != 1 || r.Revision == "" || (r.Target != "ua" && r.Target != "ads") || !r.Confirmed {
@@ -192,7 +209,7 @@ func (s *Store) Accept(ctx context.Context, r Request, cn Connections) error {
 		if err != nil {
 			return err
 		}
-		_, err = c.ExecContext(ctx, `UPDATE fermentation_control_path SET revision=?,requested_path=?,operation_id=?,target_path=?,transition_state='unknown',reason='handover_unavailable',alert_code='transition_uncertain' WHERE id=1`, revisionID.String(), r.Target, r.ID, r.Target)
+		_, err = c.ExecContext(ctx, `UPDATE fermentation_control_path SET revision=?,requested_path=?,operation_id=?,target_path=?,transition_state='unknown',reason='handover_unavailable',alert_code=COALESCE(alert_code,'transition_uncertain') WHERE id=1`, revisionID.String(), r.Target, r.ID, r.Target)
 		return err
 	})
 }

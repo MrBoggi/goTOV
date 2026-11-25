@@ -12,7 +12,6 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/MrBoggi/goTOV/internal/controlpath"
 	"github.com/rs/zerolog"
@@ -31,7 +30,9 @@ func TestControlPathIntentAndReplay(t *testing.T) {
 	}
 	server := NewServer(zerolog.New(io.Discard), nil, nil)
 	server.SetControlPathStore(store)
-	server.controlPathConnections = func() controlpath.Connections { return controlpath.Connections{UA: "connected", ADS: "connected"} }
+	server.controlPathConnections = func(context.Context) controlpath.Connections {
+		return controlpath.Connections{UA: "connected", ADS: "connected"}
+	}
 	router := server.Router()
 	get := httptest.NewRecorder()
 	router.ServeHTTP(get, httptest.NewRequest(http.MethodGet, "/api/fermentation/control-path", nil))
@@ -53,8 +54,15 @@ func TestControlPathIntentAndReplay(t *testing.T) {
 	if w := post(body); w.Code != 202 {
 		t.Fatalf("post %d %s", w.Code, w.Body.String())
 	}
+	server.controlPathConnections = func(context.Context) controlpath.Connections {
+		t.Fatal("idempotent replay probed a transport")
+		return controlpath.Connections{}
+	}
 	if w := post(body); w.Code != 202 {
 		t.Fatalf("replay %d %s", w.Code, w.Body.String())
+	}
+	server.controlPathConnections = func(context.Context) controlpath.Connections {
+		return controlpath.Connections{UA: "connected", ADS: "connected"}
 	}
 	get = httptest.NewRecorder()
 	router.ServeHTTP(get, httptest.NewRequest(http.MethodGet, "/api/fermentation/control-path", nil))
@@ -92,9 +100,11 @@ func TestControlPathRejectsInvalidRequestsAndUnavailableTarget(t *testing.T) {
 	}
 	s := NewServer(zerolog.New(io.Discard), nil, nil)
 	s.SetControlPathStore(store)
-	s.controlPathConnections = func() controlpath.Connections { return controlpath.Connections{UA: "connected", ADS: "unknown"} }
+	s.controlPathConnections = func(context.Context) controlpath.Connections {
+		return controlpath.Connections{UA: "connected", ADS: "unknown"}
+	}
 	router := s.Router()
-	snap, e := store.Status(context.Background(), s.controlConnections())
+	snap, e := store.Status(context.Background(), s.controlConnections(context.Background()))
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -118,20 +128,8 @@ func TestControlPathRejectsInvalidRequestsAndUnavailableTarget(t *testing.T) {
 			t.Fatalf("%d %s", w.Code, w.Body.String())
 		}
 	}
-	after, e := store.Status(context.Background(), s.controlConnections())
+	after, e := store.Status(context.Background(), s.controlConnections(context.Background()))
 	if e != nil || after.Revision != snap.Revision || after.Transition != nil {
 		t.Fatalf("rejection mutated intent: %+v %v", after, e)
-	}
-}
-
-func TestControlConnectionRequiresRecentNonFutureUpdate(t *testing.T) {
-	now := time.Unix(1700000000, 0)
-	for _, tc := range []struct {
-		timestamp int64
-		want      bool
-	}{{now.Add(-time.Second).UnixMilli(), true}, {now.Add(-11 * time.Second).UnixMilli(), false}, {now.Add(time.Second).UnixMilli(), false}, {0, false}} {
-		if got := recentControlSubscription(now, tc.timestamp); got != tc.want {
-			t.Fatalf("timestamp=%d got %v", tc.timestamp, got)
-		}
 	}
 }

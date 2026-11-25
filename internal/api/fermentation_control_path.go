@@ -2,6 +2,7 @@ package api
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"io"
@@ -13,37 +14,24 @@ import (
 	"github.com/google/uuid"
 )
 
-func (s *Server) controlConnections() controlpath.Connections {
+func (s *Server) controlConnections(ctx context.Context) controlpath.Connections {
 	if s.controlPathConnections != nil {
-		return s.controlPathConnections()
+		return s.controlPathConnections(ctx)
 	}
 	c := controlpath.Connections{UA: "unknown", ADS: "unknown"}
 	if s.client != nil {
 		if !s.client.IsConnected() {
 			c.UA = "disconnected"
 		} else {
-			// A connected client object alone may be stale. Require a recent local
-			// subscription update and reject future timestamps after clock changes.
-			now := time.Now()
-			s.latestMu.RLock()
-			for _, event := range s.latest {
-				if recentControlSubscription(now, event.Timestamp) {
-					c.UA = "connected"
-					break
-				}
+			probeCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
+			if s.client.ProbeConnection(probeCtx) == nil {
+				c.UA = "connected"
 			}
-			s.latestMu.RUnlock()
+			cancel()
 		}
 	}
 	// The dedicated fermentation ADS transport is not connected to the app.
 	return c
-}
-func recentControlSubscription(now time.Time, timestamp int64) bool {
-	if timestamp <= 0 {
-		return false
-	}
-	age := now.Sub(time.UnixMilli(timestamp))
-	return age >= 0 && age <= 10*time.Second
 }
 func controlError(w http.ResponseWriter, status int, code string) {
 	w.Header().Set("Content-Type", "application/json")
@@ -60,7 +48,7 @@ func (s *Server) getControlPath(w http.ResponseWriter, r *http.Request) {
 		controlError(w, 503, "persistence_unavailable")
 		return
 	}
-	value, err := s.controlPath.Status(r.Context(), s.controlConnections())
+	value, err := s.controlPath.Status(r.Context(), s.controlConnections(r.Context()))
 	if err != nil {
 		controlError(w, 503, "persistence_unavailable")
 		return
@@ -147,7 +135,20 @@ func (s *Server) postControlPath(w http.ResponseWriter, r *http.Request) {
 		controlError(w, 503, "persistence_unavailable")
 		return
 	}
-	err = s.controlPath.Accept(r.Context(), req, s.controlConnections())
+	replayed, replayErr := s.controlPath.Replay(r.Context(), req)
+	if replayErr != nil {
+		if errors.Is(replayErr, controlpath.ErrConflict) {
+			controlError(w, 409, "idempotency_conflict")
+		} else {
+			controlError(w, 503, "persistence_unavailable")
+		}
+		return
+	}
+	if replayed {
+		writeAcceptedControlPath(w, req.ID)
+		return
+	}
+	err = s.controlPath.Accept(r.Context(), req, s.controlConnections(r.Context()))
 	if err != nil {
 		switch {
 		case errors.Is(err, controlpath.ErrInvalid):
@@ -165,8 +166,12 @@ func (s *Server) postControlPath(w http.ResponseWriter, r *http.Request) {
 		}
 		return
 	}
+	writeAcceptedControlPath(w, req.ID)
+}
+
+func writeAcceptedControlPath(w http.ResponseWriter, id string) {
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Cache-Control", "no-store")
 	w.WriteHeader(http.StatusAccepted)
-	_ = json.NewEncoder(w).Encode(map[string]string{"operation_id": req.ID, "state": "pending"})
+	_ = json.NewEncoder(w).Encode(map[string]string{"operation_id": id, "state": "pending"})
 }

@@ -26,7 +26,7 @@ type Server struct {
 	engine                 *fermentation.Engine
 	adsMonitor             *ads.Monitor
 	controlPath            *controlpath.Store
-	controlPathConnections func() controlpath.Connections
+	controlPathConnections func(context.Context) controlpath.Connections
 
 	// Connected websocket clients
 	mu          sync.RWMutex

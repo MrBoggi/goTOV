@@ -226,3 +226,35 @@ func TestPendingBlocksNewRequestAndReplayStillWins(t *testing.T) {
 		t.Fatalf("want in-progress error: %v", err)
 	}
 }
+
+func TestPriorUnacknowledgedAlertSurvivesNewIntent(t *testing.T) {
+	ctx := context.Background()
+	db, s := storeAt(t, filepath.Join(t.TempDir(), "state.db"))
+	defer db.Close()
+	cn := Connections{UA: "connected", ADS: "connected"}
+	initial, err := s.Status(ctx, cn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	first := request(initial.Revision)
+	if err = s.Accept(ctx, first, cn); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = db.Exec(`UPDATE fermentation_control_path SET alert_code='original_unresolved_alarm' WHERE id=1`); err != nil {
+		t.Fatal(err)
+	}
+	after, err := s.Status(ctx, cn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	second := request(after.Revision)
+	second.ID = "b037789b-ff3e-48d3-87ea-bbe3c19f8070"
+	second.Target = "ua"
+	if err = s.Accept(ctx, second, cn); err != nil {
+		t.Fatal(err)
+	}
+	final, err := s.Status(ctx, cn)
+	if err != nil || final.Alert == nil || final.Alert.Severity != "high" || final.Alert.Code != "original_unresolved_alarm" || final.Requested != "ua" {
+		t.Fatalf("alarm lost: %+v %v", final, err)
+	}
+}
