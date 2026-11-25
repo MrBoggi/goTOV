@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/MrBoggi/goTOV/internal/ads"
+	"github.com/MrBoggi/goTOV/internal/controlpath"
 	"github.com/MrBoggi/goTOV/internal/fermentation"
 	"github.com/MrBoggi/goTOV/internal/opcua"
 	"github.com/MrBoggi/goTOV/internal/version"
@@ -19,11 +20,13 @@ import (
 )
 
 type Server struct {
-	log               zerolog.Logger
-	client            *opcua.Client
-	fermentationStore fermentation.FermentationStore
-	engine            *fermentation.Engine
-	adsMonitor        *ads.Monitor
+	log                    zerolog.Logger
+	client                 *opcua.Client
+	fermentationStore      fermentation.FermentationStore
+	engine                 *fermentation.Engine
+	adsMonitor             *ads.Monitor
+	controlPath            *controlpath.Store
+	controlPathConnections func(context.Context) controlpath.Connections
 
 	// Connected websocket clients
 	mu          sync.RWMutex
@@ -38,6 +41,8 @@ type Server struct {
 	httpServerMu sync.RWMutex
 	httpServer   *http.Server
 }
+
+func (s *Server) SetControlPathStore(store *controlpath.Store) { s.controlPath = store }
 
 // SetADSMonitor attaches optional read-only ADS verification diagnostics.
 func (s *Server) SetADSMonitor(monitor *ads.Monitor) { s.adsMonitor = monitor }
@@ -122,6 +127,8 @@ func (s *Server) Router() http.Handler {
 	r.Put("/api/fermentation/active/{id}/step", s.handleUpdateActiveFermentationStep)
 	r.Get("/api/fermentation/status", s.handleGetFermentationStatus)
 	r.Get("/api/fermentation/control-status", s.handleFermentationControlStatus)
+	r.Get("/api/fermentation/control-path", s.getControlPath)
+	r.Post("/api/fermentation/control-path", s.postControlPath)
 	r.Get("/api/fermentation/history/{id}", s.handleGetFermentationHistory)
 	r.Get("/api/fermentation/docs", s.handleGetApiDocs)
 	r.Delete("/api/fermentation/plan/{id}", s.handleDeleteFermentationPlan)

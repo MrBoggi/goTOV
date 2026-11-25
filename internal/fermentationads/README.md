@@ -113,3 +113,18 @@ supervisor or claim physical SAFE. Its response follows the proposed
 reviewed and merged after that contract. A future activation implementation
 must revise the contract and status wiring together; it must never retain this
 static status when a supervisor is actually started.
+
+The intent-only `GET/POST /api/fermentation/control-path` resource is distinct
+from this adapter. It persists requested path and idempotency keys in the
+fermentation SQLite database but has no PLC-writing or auto-resume path. UA is
+reported connected only when its client reports connected and a bounded
+read-only request to standard OPC UA ServerStatus.State confirms a running
+server. The request has a two-second deadline; failure or timeout returns
+unknown, and a disconnected client is reported disconnected. This probe
+verifies a transport/session at that moment, not fermentation ownership or
+physical feedback. The dedicated ADS transport is not wired into the application and is unknown,
+even if the separate global input ADS monitor is healthy. These are transport
+offers, not verified PLC owner, physical feedback or a commissioning decision.
+Accepted requests are durably marked unknown with a high alert because the
+required handover is unavailable. Exact retries return their original acceptance
+and never trigger a PLC write; idempotency records are retained without expiry.
