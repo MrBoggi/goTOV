@@ -3,6 +3,7 @@ package fermentationads
 import (
 	"context"
 	"errors"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -13,6 +14,9 @@ type fakeLink struct {
 	commands      []Command
 	failAt        int
 	forceMismatch bool
+	statusReads   int
+	status        func(Command, Status) Status
+	applied       func(Command, Applied) Applied
 }
 
 func (f *fakeLink) WriteCommand(_ context.Context, c Command) error {
@@ -32,7 +36,12 @@ func (f *fakeLink) current() Command {
 }
 func (f *fakeLink) ReadStatus(context.Context) (Status, error) {
 	c := f.current()
-	return Status{Session: c.Session, AppliedSequence: c.Sequence, WatchdogHealthy: true, Enabled: c.Enable, Valid: true, Owner: ADS}, nil
+	f.statusReads++
+	st := Status{Session: c.Session, AppliedSequence: c.Sequence, WatchdogHealthy: true, Enabled: c.Enable, Valid: true, Owner: ADS}
+	if f.status != nil {
+		st = f.status(c, st)
+	}
+	return st, nil
 }
 func (f *fakeLink) ReadApplied(context.Context) (Applied, error) {
 	c := f.current()
@@ -40,7 +49,134 @@ func (f *fakeLink) ReadApplied(context.Context) (Applied, error) {
 	if f.forceMismatch && c.Enable {
 		out = Outputs{F1Cooling: true}
 	}
-	return Applied{Session: c.Session, AppliedSequence: c.Sequence, Outputs: out, Enabled: c.Enable}, nil
+	ap := Applied{Session: c.Session, AppliedSequence: c.Sequence, Outputs: out, Enabled: c.Enable}
+	if f.applied != nil {
+		ap = f.applied(c, ap)
+	}
+	return ap, nil
+}
+
+func TestRunRechecksOwnershipBeforeEnable(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		change func(*Status)
+	}{
+		{"PLC fault", func(st *Status) { st.Faults = 1 }},
+		{"owner loss", func(st *Status) { st.Owner = Safe }},
+		{"watchdog loss", func(st *Status) { st.WatchdogHealthy = false }},
+		{"PLC restart", func(st *Status) { *st = Status{Owner: Safe} }},
+		{"new session", func(st *Status) { st.Session ^= 1 }},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			f := &fakeLink{}
+			f.status = func(_ Command, st Status) Status {
+				if f.statusReads > 1 {
+					tc.change(&st)
+				}
+				return st
+			}
+			desired := make(chan Decision, 1)
+			desired <- Decision{DecidedAt: time.Now()}
+			err := run(context.Background(), f, desired, nil, time.Second)
+			if err == nil || !strings.Contains(err.Error(), "verify existing ADS ownership") {
+				t.Fatalf("expected preflight rejection, got %v", err)
+			}
+			if len(f.commands) != 1 || f.commands[0].Enable || f.commands[0].Owner != ADS {
+				t.Fatalf("unexpected commands %+v", f.commands)
+			}
+		})
+	}
+}
+
+func TestRunRejectsUnsafeStatusBeforeMatchingAppliedAcknowledgement(t *testing.T) {
+	f := &fakeLink{
+		status: func(c Command, st Status) Status {
+			if c.Enable {
+				st.Faults = 1
+			}
+			return st
+		},
+		applied: func(c Command, ap Applied) Applied {
+			if c.Enable {
+				ap.AppliedSequence--
+				ap.Enabled = false
+			}
+			return ap
+		},
+	}
+	desired := make(chan Decision, 1)
+	desired <- Decision{DecidedAt: time.Now()}
+	err := run(context.Background(), f, desired, nil, time.Second)
+	if err == nil || !strings.Contains(err.Error(), "unsafe status") {
+		t.Fatalf("expected immediate fault, got %v", err)
+	}
+	if f.statusReads != 3 || len(f.commands) != 2 {
+		t.Fatalf("expected stop at first fault, got %d status reads and %d commands", f.statusReads, len(f.commands))
+	}
+}
+
+func TestRunWaitsForIndependentAppliedAcknowledgement(t *testing.T) {
+	f := &fakeLink{}
+	f.applied = func(c Command, ap Applied) Applied {
+		if c.Enable && f.statusReads == 3 {
+			ap.AppliedSequence--
+			ap.Enabled = false
+			ap.Outputs = Outputs{}
+		}
+		return ap
+	}
+	desired := make(chan Decision, 1)
+	desired <- Decision{DecidedAt: time.Now(), Outputs: Outputs{F1Cooling: true}}
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	observations := make(chan Observation, 2)
+	done := make(chan error, 1)
+	go func() { done <- run(ctx, f, desired, observations, time.Second) }()
+	for i := 0; i < 2; i++ {
+		select {
+		case obs := <-observations:
+			if obs.Applied.AppliedSequence != uint32(i+1) || !obs.Converged {
+				t.Errorf("unexpected acknowledgement: %+v", obs)
+			}
+		case <-ctx.Done():
+			t.Fatal("expected acknowledgement")
+		}
+	}
+	cancel()
+	if err := <-done; !errors.Is(err, context.Canceled) {
+		t.Fatal(err)
+	}
+	if f.statusReads != 4 || len(f.commands) != 2 {
+		t.Fatalf("expected a second acknowledgement poll without a new write, got %d reads and %d commands", f.statusReads, len(f.commands))
+	}
+}
+
+func TestRunRejectsHazardousAppliedImageWhileAcknowledgementIsPending(t *testing.T) {
+	for name, outputs := range map[string]Outputs{
+		"F1 heating and cooling": {F1Heating: true, F1Cooling: true},
+		"F2 heating and cooling": {F2Heating: true, F2Cooling: true},
+		"pump without valve":     {Pump: true},
+	} {
+		t.Run(name, func(t *testing.T) {
+			f := &fakeLink{applied: func(c Command, ap Applied) Applied {
+				if c.Enable {
+					ap.AppliedSequence--
+					ap.Enabled = false
+					ap.Outputs = outputs
+				}
+				return ap
+			}}
+			desired := make(chan Decision, 1)
+			desired <- Decision{DecidedAt: time.Now()}
+			err := run(context.Background(), f, desired, nil, time.Second)
+			if err == nil || !strings.Contains(err.Error(), "violates output interlocks") {
+				t.Fatalf("expected immediate interlock rejection, got %v", err)
+			}
+			if f.statusReads != 3 || len(f.commands) != 2 {
+				t.Fatalf("expected stop at first hazardous image, got %d status reads and %d commands", f.statusReads, len(f.commands))
+			}
+		})
+	}
 }
 func TestRunDisabledHandoverThenHeartbeats(t *testing.T) {
 	f := &fakeLink{}

@@ -16,14 +16,26 @@ must choose a limit suitable for its control loop and validate it on the target;
 no existing producer is integrated and no production age is approved here.
 
 The coordinator sends a disabled image first, then a new enabled command every
-200 ms, with a 400 ms deadline for each complete transaction. It permits up to
-five seconds for the PLC's post-interlock image to converge while continuing
-heartbeats. These bounds are software assumptions based on the PLC source's
+200 ms, with a 400 ms deadline covering the pre-write check, write and
+acknowledgement. Before each enabled commit it rechecks ownership, session,
+command validity, watchdog and applied image for the preceding command. Once
+the disabled acknowledgement is established, a fault or unexpected identity
+ends the run even if the new command is still awaiting acknowledgement. An
+applied heating/cooling conflict or pump running without a valve ends the run
+immediately. Interlock-consistent image differences may converge within five
+seconds while heartbeats continue. These bounds are software assumptions based on the PLC source's
 one-second watchdog and one-second valve/pump sequencing phases; they need
 independent review and timing verification on the actual target. Observations
 are PLC-reported images, not physical feedback. Observations may be dropped if
 the consumer cannot keep up, so a production alarm/status integration must
 separately latch and report terminal errors.
+
+Offline tests inject fault, owner and watchdog loss, cleared or foreign
+sessions, and hazardous applied images. The transport simulation delivers a
+commit but drops its reply and verifies the coordinator stops, retains the UA
+fence and refuses reuse. A distinct explicit activation in an independently
+reconciled simulation starts with a new session and a disabled command. These
+tests do not provide a real reconciliation mechanism or establish PLC timing.
 
 Remaining work includes actual session configuration and lifecycle, an
 exclusive UA/ADS ownership arbiter covering all writers and delayed callbacks,

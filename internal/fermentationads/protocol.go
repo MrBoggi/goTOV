@@ -24,6 +24,11 @@ const (
 )
 
 type Outputs struct{ F1Cooling, F2Cooling, F1Heating, F2Heating, Pump bool }
+
+func (o Outputs) interlocked() bool {
+	return !(o.F1Cooling && o.F1Heating || o.F2Cooling && o.F2Heating || o.Pump && !o.F1Cooling && !o.F2Cooling)
+}
+
 type Command struct {
 	Session, Sequence uint32
 	Owner             Owner
@@ -49,7 +54,7 @@ func (c Command) MarshalBinary() ([]byte, error) {
 	if c.Session == 0 || c.Sequence == 0 || c.Owner > ADS {
 		return nil, fmt.Errorf("invalid command identity or owner")
 	}
-	if c.Outputs.F1Cooling && c.Outputs.F1Heating || c.Outputs.F2Cooling && c.Outputs.F2Heating || c.Outputs.Pump && !c.Outputs.F1Cooling && !c.Outputs.F2Cooling {
+	if !c.Outputs.interlocked() {
 		return nil, fmt.Errorf("command interlock")
 	}
 	b := make([]byte, CommandSize)
