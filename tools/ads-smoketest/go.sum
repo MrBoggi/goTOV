@@ -1,0 +1,6 @@
+cloud.google.com/go v0.123.0 h1:2NAUJwPR47q+E35uaJeYoNhuNEM9kM8SjgRgdeOJUSE=
+cloud.google.com/go v0.123.0/go.mod h1:xBoMV08QcqUGuPW65Qfm1o9Y4zKZBpGS+7bImXLTAZU=
+github.com/google/go-cmp v0.7.0 h1:wk8382ETsv4JYUZwIsn6YpYiWiBsYLSJiTsyBybVuN8=
+github.com/google/go-cmp v0.7.0/go.mod h1:pXiqmnSA92OHEEa9HXL2W4E7lf9JzCmGVUdgjX3N/iU=
+github.com/siyka-au/go-ads/v3 v3.0.1 h1:HU4SqjZyDlxDZ/ZyQMkVUFWVruufSMpW9t9YdyBJ2K8=
+github.com/siyka-au/go-ads/v3 v3.0.1/go.mod h1:8/0XvNORGMFmA8rtjFZj1CWEwPstnoTFHbf8/HXeZs4=
