@@ -1,12 +1,14 @@
 package ads
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"math"
 	"reflect"
+	"strings"
 	"time"
 )
 
@@ -89,6 +91,11 @@ func ReadDiagnostic(r io.Reader) (DiagnosticReport, error) {
 	if len(data) > 16*1024*1024 {
 		return DiagnosticReport{}, fmt.Errorf("diagnostic file exceeds 16 MiB")
 	}
+	decoder := json.NewDecoder(bytes.NewReader(data))
+	decoder.UseNumber()
+	if err = rejectDuplicateMembers(decoder); err != nil {
+		return DiagnosticReport{}, err
+	}
 	var report DiagnosticReport
 	if err = json.Unmarshal(data, &report); err != nil {
 		return report, err
@@ -114,6 +121,38 @@ func ReadDiagnostic(r io.Reader) (DiagnosticReport, error) {
 	return report, nil
 }
 
+// encoding/json merges duplicate object members and matches struct fields
+// case-insensitively. Evidence must have one unambiguous value per member.
+func rejectDuplicateMembers(decoder *json.Decoder) error {
+	token, err := decoder.Token()
+	if err != nil {
+		return err
+	}
+	if token != json.Delim('{') && token != json.Delim('[') {
+		return nil
+	}
+	seen := make(map[string]struct{})
+	for decoder.More() {
+		if token == json.Delim('{') {
+			member, err := decoder.Token()
+			if err != nil {
+				return err
+			}
+			name := member.(string)
+			folded := strings.ToLower(strings.ToUpper(name))
+			if _, ok := seen[folded]; ok {
+				return fmt.Errorf("duplicate diagnostic member %q", name)
+			}
+			seen[folded] = struct{}{}
+		}
+		if err := rejectDuplicateMembers(decoder); err != nil {
+			return err
+		}
+	}
+	_, err = decoder.Token()
+	return err
+}
+
 // CompareDiagnostics compares all raw contract fields exactly. References must
 // be independently observed OPC UA/XAE values, correlated with the stable ADS
 // publisher sequence. Time proximity alone does not establish a shared cycle.
@@ -122,7 +161,7 @@ func CompareDiagnostics(capture, reference DiagnosticReport, maxSkew time.Durati
 	if capture.Source != "ads" || (reference.Source != "xae" && reference.Source != "opcua") {
 		return fmt.Errorf("require ads capture and independent xae/opcua reference")
 	}
-	if reference.ReferenceEvidence == "" {
+	if strings.TrimSpace(reference.ReferenceEvidence) == "" {
 		return fmt.Errorf("independent reference provenance and cycle correlation are required")
 	}
 	if capture.Target == "" || capture.Target != reference.Target {
@@ -168,22 +207,30 @@ func CompareDiagnostics(capture, reference DiagnosticReport, maxSkew time.Durati
 		if skew > maxSkew {
 			return fmt.Errorf("sample %d reference exceeds max skew", i)
 		}
-		if !sameRawInputs(sample.Inputs, other.Inputs) {
-			return fmt.Errorf("sample %d sequence %d: input values or sequence differ", i, sample.Inputs.Sequence)
+		if err := compareRawInputs(sample.Inputs, other.Inputs); err != nil {
+			return fmt.Errorf("sample %d sequence %d: %w", i, sample.Inputs.Sequence, err)
 		}
 	}
 	return nil
 }
 
-// sameRawInputs compares IEEE-754 payloads as well as all other fields.
-func sameRawInputs(a, b Inputs) bool {
-	if math.Float32bits(a.FlowHLT) != math.Float32bits(b.FlowHLT) ||
-		math.Float32bits(a.FlowMLT) != math.Float32bits(b.FlowMLT) ||
-		math.Float32bits(a.FlowWort) != math.Float32bits(b.FlowWort) ||
-		math.Float32bits(a.MltRecircTemp) != math.Float32bits(b.MltRecircTemp) {
-		return false
+// compareRawInputs reports the first differing field, comparing REAL values
+// by their IEEE-754 payloads.
+func compareRawInputs(a, b Inputs) error {
+	left, right := reflect.ValueOf(a), reflect.ValueOf(b)
+	for i := 0; i < left.NumField(); i++ {
+		field := left.Type().Field(i).Name
+		adsValue, referenceValue := left.Field(i).Interface(), right.Field(i).Interface()
+		if adsReal, ok := adsValue.(float32); ok {
+			adsBits, referenceBits := math.Float32bits(adsReal), math.Float32bits(referenceValue.(float32))
+			if adsBits != referenceBits {
+				return fmt.Errorf("%s differs: ADS=%#08x, reference=%#08x (REAL bits)", field, adsBits, referenceBits)
+			}
+			continue
+		}
+		if adsValue != referenceValue {
+			return fmt.Errorf("%s differs: ADS=%v, reference=%v", field, adsValue, referenceValue)
+		}
 	}
-	a.FlowHLT, a.FlowMLT, a.FlowWort, a.MltRecircTemp = 0, 0, 0, 0
-	b.FlowHLT, b.FlowMLT, b.FlowWort, b.MltRecircTemp = 0, 0, 0, 0
-	return a == b
+	return nil
 }

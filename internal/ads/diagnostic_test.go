@@ -95,6 +95,7 @@ func TestCompareDiagnosticContractAndFailures(t *testing.T) {
 		{"flag mismatch", func(r *DiagnosticReport) { r.Samples[0].Inputs.FlowHLTOutOfRange = false }},
 		{"integer mismatch", func(r *DiagnosticReport) { r.Samples[2].Inputs.GlycolChillerTemp++ }},
 		{"wrong source", func(r *DiagnosticReport) { r.Source = "ads" }},
+		{"blank reference provenance", func(r *DiagnosticReport) { r.ReferenceEvidence = " \t\n" }},
 		{"wrong target", func(r *DiagnosticReport) { r.Target = "other" }},
 		{"partial", func(r *DiagnosticReport) { r.Error = "read failed" }},
 		{"short", func(r *DiagnosticReport) { r.Samples = r.Samples[:2] }},
@@ -149,6 +150,37 @@ func TestReadDiagnosticRejectsMissingFalseOrZeroFields(t *testing.T) {
 		_, err = ReadDiagnostic(bytes.NewBufferString(input))
 		require.Error(t, err)
 	}
+}
+
+func TestReadDiagnosticRejectsAmbiguousEvidence(t *testing.T) {
+	b, err := json.Marshal(evidence(t))
+	require.NoError(t, err)
+	for _, tc := range []struct{ from, to, member string }{
+		{`"FlowMLTOutOfRange":false`, `"FlowMLTOutOfRange":true,"FlowMLTOutOfRange":false`, "FlowMLTOutOfRange"},
+		{`"Inputs":{`, `"Inputs":{"HltTemp":999},"inputs":{`, "inputs"},
+		{`"Error":""`, `"Error":"read failed","error":""`, "error"},
+	} {
+		t.Run(tc.member, func(t *testing.T) {
+			data := bytes.Replace(b, []byte(tc.from), []byte(tc.to), 1)
+			_, err := ReadDiagnostic(bytes.NewReader(data))
+			require.ErrorContains(t, err, fmt.Sprintf("duplicate diagnostic member %q", tc.member))
+		})
+	}
+}
+
+func TestCompareDiagnosticsIdentifiesRawMismatch(t *testing.T) {
+	capture, reference := evidence(t), evidence(t)
+	reference.Source = "opcua"
+	reference.ReferenceEvidence = "synthetic fixture, same publisher cycles"
+	capture.Samples[1].Inputs.FlowHLT = 0
+	reference.Samples[1].Inputs.FlowHLT = math.Float32frombits(0x80000000)
+	err := CompareDiagnostics(capture, reference, time.Second)
+	require.EqualError(t, err, "sample 1 sequence 4: FlowHLT differs: ADS=0x00000000, reference=0x80000000 (REAL bits)")
+	reference.Samples[1].Inputs.FlowHLT = 0
+	capture.Samples[1].Inputs.HltTemp = -1
+	reference.Samples[1].Inputs.HltTemp = 42
+	err = CompareDiagnostics(capture, reference, time.Second)
+	require.EqualError(t, err, "sample 1 sequence 4: HltTemp differs: ADS=-1, reference=42")
 }
 
 // Exercise the complete diagnostic loop with the real SDK and the existing
