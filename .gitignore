@@ -7,6 +7,7 @@ bin/
 *.so
 *.dylib
 *.test
+tools/ads-smoketest/ads-smoketest
 
 # Go workspace files
 go.work
