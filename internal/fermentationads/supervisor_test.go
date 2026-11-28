@@ -13,6 +13,7 @@ type fakeFence struct {
 	release  chan struct{}
 	err      error
 	abortErr error
+	aborts   int
 }
 
 func (f *fakeFence) BeginFence(ctx context.Context) (uint64, error) {
@@ -24,8 +25,11 @@ func (f *fakeFence) BeginFence(ctx context.Context) (uint64, error) {
 		return 1, f.err
 	}
 }
-func (f *fakeFence) AbortFence(context.Context, uint64) error { return f.abortErr }
-func (f *fakeFence) MarkADSStarted(uint64) error              { return nil }
+func (f *fakeFence) AbortFence(context.Context, uint64) error {
+	f.aborts++
+	return f.abortErr
+}
+func (f *fakeFence) MarkADSStarted(uint64) error { return nil }
 func TestSupervisorWaitsForUAFenceBeforeAnyADSCommand(t *testing.T) {
 	fence := &fakeFence{started: make(chan struct{}), release: make(chan struct{})}
 	link := &fakeLink{}

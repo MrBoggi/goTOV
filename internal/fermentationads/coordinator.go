@@ -33,7 +33,7 @@ type Decision struct {
 	DecidedAt time.Time
 }
 
-// Run explicitly requests ADS ownership and keeps the watchdog alive until
+// run explicitly requests ADS ownership and keeps the watchdog alive until
 // cancellation or an error. It never requests UA ownership or retries after an
 // error. A new invocation with a new session is required for reactivation.
 // The caller must fence every UA writer before starting this method and keep
@@ -86,13 +86,12 @@ func run(ctx context.Context, link Link, desired <-chan Decision, observe chan<-
 	// Controller's valve stop and settle stages each require one second; allow
 	// bounded additional scan/transport time. This is not physical feedback.
 	const convergenceTimeout = 5 * time.Second
-	var seq uint32
+	var previous Command
 	send := func(enable bool, output Outputs) (Observation, error) {
-		if seq == ^uint32(0) {
+		if previous.Sequence == ^uint32(0) {
 			return Observation{}, fmt.Errorf("sequence exhausted; explicit new session required")
 		}
-		seq++
-		cmd := Command{Session: session, Sequence: seq, Owner: ADS, Enable: enable, Outputs: output}
+		cmd := Command{Session: session, Sequence: previous.Sequence + 1, Owner: ADS, Enable: enable, Outputs: output}
 		if !time.Now().Before(decisionDeadline) {
 			return Observation{}, fmt.Errorf("control decision expired")
 		}
@@ -102,25 +101,29 @@ func run(ctx context.Context, link Link, desired <-chan Decision, observe chan<-
 		}
 		transactionCtx, cancel := context.WithDeadline(ctx, transactionDeadline)
 		defer cancel()
+		if previous.Sequence != 0 {
+			// Recheck the last acknowledgement before sending another image.
+			// Positive evidence can change between transactions.
+			if _, _, err := readAcknowledgement(transactionCtx, link, previous, previous); err != nil {
+				return Observation{}, fmt.Errorf("verify existing ADS ownership before write: %w", err)
+			}
+		}
+		if err := transactionCtx.Err(); err != nil {
+			return Observation{}, err
+		}
 		if err := link.WriteCommand(transactionCtx, cmd); err != nil {
 			return Observation{}, fmt.Errorf("write command: %w", err)
 		}
 		poll := time.NewTicker(20 * time.Millisecond)
 		defer poll.Stop()
 		for {
-			st, err := link.ReadStatus(transactionCtx)
+			observation, acknowledged, err := readAcknowledgement(transactionCtx, link, cmd, previous)
 			if err != nil {
-				return Observation{}, fmt.Errorf("read status: %w", err)
+				return Observation{}, err
 			}
-			ap, err := link.ReadApplied(transactionCtx)
-			if err != nil {
-				return Observation{}, fmt.Errorf("read applied: %w", err)
-			}
-			if st.Session == session && st.AppliedSequence == seq && ap.Session == session && ap.AppliedSequence == seq {
-				if st.Owner != ADS || !st.Valid || !st.WatchdogHealthy || st.Faults != 0 || st.Enabled != enable || ap.Enabled != enable {
-					return Observation{}, fmt.Errorf("PLC rejected command or entered unsafe status")
-				}
-				return Observation{Status: st, Applied: ap, Converged: ap.Outputs == output}, nil
+			if acknowledged {
+				previous = cmd
+				return observation, nil
 			}
 			select {
 			case <-transactionCtx.Done():
@@ -194,6 +197,53 @@ func run(ctx context.Context, link Link, desired <-chan Decision, observe chan<-
 			}
 		}
 	}
+}
+
+// Status and Applied are independently stable. After establishing ownership,
+// each may report the last acknowledged command while the next takes effect.
+// No other session or command sequence can be part of that transition.
+func readAcknowledgement(ctx context.Context, link Link, current, previous Command) (Observation, bool, error) {
+	st, err := link.ReadStatus(ctx)
+	if err != nil {
+		return Observation{}, false, fmt.Errorf("read status: %w", err)
+	}
+	statusCurrent := st.Session == current.Session && st.AppliedSequence == current.Sequence
+	if statusCurrent || previous.Sequence != 0 || st.Session == current.Session {
+		expected := current
+		if !statusCurrent {
+			expected = previous
+		}
+		if expected.Sequence == 0 || st.Session != expected.Session || st.AppliedSequence != expected.Sequence {
+			return Observation{}, false, fmt.Errorf("unexpected PLC status session or sequence")
+		}
+		if st.Owner != ADS || !st.Valid || !st.WatchdogHealthy || st.Faults != 0 || st.Enabled != expected.Enable {
+			return Observation{}, false, fmt.Errorf("PLC rejected command or entered unsafe status (owner=%d, valid=%t, watchdog=%t, faults=%#x, enabled=%t)", st.Owner, st.Valid, st.WatchdogHealthy, st.Faults, st.Enabled)
+		}
+	}
+	ap, err := link.ReadApplied(ctx)
+	if err != nil {
+		return Observation{}, false, fmt.Errorf("read applied: %w", err)
+	}
+	if !ap.Outputs.interlocked() {
+		return Observation{}, false, fmt.Errorf("PLC applied image violates output interlocks")
+	}
+	appliedCurrent := ap.Session == current.Session && ap.AppliedSequence == current.Sequence
+	if appliedCurrent || previous.Sequence != 0 || ap.Session == current.Session {
+		expected := current
+		if !appliedCurrent {
+			expected = previous
+		}
+		if expected.Sequence == 0 || ap.Session != expected.Session || ap.AppliedSequence != expected.Sequence {
+			return Observation{}, false, fmt.Errorf("unexpected PLC applied session or sequence")
+		}
+		if ap.Enabled != expected.Enable || (!ap.Enabled && ap.Outputs != (Outputs{})) {
+			return Observation{}, false, fmt.Errorf("PLC applied image disagrees with command enable state")
+		}
+	}
+	if err := ctx.Err(); err != nil {
+		return Observation{}, false, err
+	}
+	return Observation{Status: st, Applied: ap, Converged: ap.Outputs == current.Outputs}, statusCurrent && appliedCurrent, nil
 }
 
 // A late renewal cannot revive an expired decision even if both select cases

@@ -10,6 +10,8 @@ import (
 	"github.com/rs/zerolog"
 )
 
+const temperatureHysteresis = float32(0.3)
+
 type Engine struct {
 	store  FermentationStore
 	client *opcua.Client
@@ -670,12 +672,8 @@ func (e *Engine) processOne(state *FermentationState) (bool, error) {
 		}
 
 		target := float32(state.TargetTemp)
-		hysteresis := float32(0.3)
-		heating := false
-		cooling := false
 
-		// Transitioning check: are we within ±0.2°C of setpoint?
-		withinRange := currentTemp >= target-hysteresis && currentTemp <= target+hysteresis
+		withinRange := currentTemp >= target-temperatureHysteresis && currentTemp <= target+temperatureHysteresis
 
 		if !state.StepActive {
 			if withinRange {
@@ -767,17 +765,7 @@ func (e *Engine) processOne(state *FermentationState) (bool, error) {
 			lastHeating, _ := e.lastWritten[jacketTag].(bool)
 			e.mu.RUnlock()
 
-			if currentTemp > target+hysteresis {
-				cooling = true
-			} else if currentTemp > target {
-				cooling = lastCooling // Stay on if already cooling, but don't start
-			}
-
-			if currentTemp < target-hysteresis {
-				heating = true
-			} else if currentTemp < target {
-				heating = lastHeating // Stay on if already heating, but don't start
-			}
+			cooling, heating := thermostatDemand(currentTemp, target, lastCooling, lastHeating)
 
 			e.log.Debug().
 				Str("tank", state.TankID).
@@ -801,6 +789,14 @@ func (e *Engine) processOne(state *FermentationState) (bool, error) {
 	}
 
 	return coolingActive, nil
+}
+
+// thermostatDemand starts heating or cooling outside the hysteresis band and
+// keeps an active demand on its side of the setpoint until the target is reached.
+func thermostatDemand(current, target float32, lastCooling, lastHeating bool) (cooling, heating bool) {
+	cooling = current > target+temperatureHysteresis || (current > target && lastCooling)
+	heating = current < target-temperatureHysteresis || (current < target && lastHeating)
+	return cooling, heating
 }
 
 func (e *Engine) setTankHardware(tankID string, cooling bool, heating bool) {
