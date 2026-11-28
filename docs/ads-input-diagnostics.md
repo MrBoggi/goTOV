@@ -26,8 +26,9 @@ investigate timing separately, without relaxing the contract.
 Comparison is offline against an independently captured XAE/OPC UA reference.
 It checks every raw INT, REAL and BOOL exactly, matching even sequence, target,
 sample count and bounded UTC windows. No unit scaling or floating tolerance is
-inferred. Missing zero/false fields, nulls, incomplete captures, stale windows,
-wrong contract, duplicate cycles and value mismatches fail closed.
+inferred. Missing zero/false fields, nulls, duplicate JSON keys (including case
+aliases), incomplete captures, stale windows, wrong contract, duplicate cycles
+and value mismatches fail closed.
 
 ## Build and offline demonstration
 
@@ -107,8 +108,9 @@ legacy node/symbol mappings on the target rather than assuming NodeIDs or units.
 Choose and justify `max-skew` from the acquisition method; it bounds each read
 window and cross-source start difference. It does not prove cycle identity.
 Success means exact agreement for those recorded samples, not a commissioning,
-output-safety or production-cutover approval. Comparison fails on the first
-mismatch, identifying sample/sequence; inspect both retained artifacts for values.
+output-safety or production-cutover approval. A raw input mismatch reports the
+first differing field, both values, sample index, and publisher sequence.
+REAL mismatches report the exact IEEE-754 bit patterns.
 The software cannot authenticate a manually supplied reference: preserve and
 review its independent source artifact and correlation evidence separately.
 
